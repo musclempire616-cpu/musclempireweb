@@ -2,9 +2,9 @@ import { APPS_SCRIPT_URL } from "@/lib/sheets";
 
 const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
 
-const IMAGES_KEY = "me_gallery_images_v2"; // v2 = no defaults, Sheets only
+const IMAGES_KEY = "me_gallery_images_v4";
 const IMAGES_TS_KEY = "me_gallery_images_ts";
-const VIDEOS_KEY = "me_gallery_videos_v2";
+const VIDEOS_KEY = "me_gallery_videos_v4";
 const VIDEOS_TS_KEY = "me_gallery_videos_ts";
 const CACHE_TTL = 60 * 1000; // 1 min
 
@@ -40,7 +40,15 @@ export function dedupeVideos(videos: GalleryVideo[]): GalleryVideo[] {
 // ── localStorage helpers ─────────────────────────────────────────────────────
 
 function getLocalImages(): GalleryImage[] {
-  try { return dedupeImages(JSON.parse(localStorage.getItem(IMAGES_KEY) || "[]")); } catch { return []; }
+  try {
+    try {
+      localStorage.removeItem("me_gallery_images_v3");
+      localStorage.removeItem("me_gallery_images_v2");
+      localStorage.removeItem("me_gallery_images_v1");
+      localStorage.removeItem("me_gallery_images");
+    } catch {}
+    return dedupeImages(JSON.parse(localStorage.getItem(IMAGES_KEY) || "[]"));
+  } catch { return []; }
 }
 function saveLocalImages(images: GalleryImage[]): void {
   const deduped = dedupeImages(images);
@@ -52,7 +60,15 @@ function isImagesCacheStale(): boolean {
 }
 
 function getLocalVideos(): GalleryVideo[] {
-  try { return dedupeVideos(JSON.parse(localStorage.getItem(VIDEOS_KEY) || "[]")); } catch { return []; }
+  try {
+    try {
+      localStorage.removeItem("me_gallery_videos_v3");
+      localStorage.removeItem("me_gallery_videos_v2");
+      localStorage.removeItem("me_gallery_videos_v1");
+      localStorage.removeItem("me_gallery_videos");
+    } catch {}
+    return dedupeVideos(JSON.parse(localStorage.getItem(VIDEOS_KEY) || "[]"));
+  } catch { return []; }
 }
 function saveLocalVideos(videos: GalleryVideo[]): void {
   const deduped = dedupeVideos(videos);
@@ -112,11 +128,8 @@ function saveVideosToSheets(videos: GalleryVideo[]): void {
 // ── Public API — Images ──────────────────────────────────────────────────────
 
 export async function getGalleryImages(): Promise<GalleryImage[]> {
-  const local = getLocalImages();
-  if (local.length === 0 || isImagesCacheStale()) {
-    syncImagesFromSheets();
-  }
-  return local;
+  syncImagesFromSheets().catch(() => {});
+  return getLocalImages();
 }
 
 export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
@@ -161,11 +174,8 @@ export async function removeGalleryImage(id: string): Promise<void> {
 // ── Public API — Videos ──────────────────────────────────────────────────────
 
 export async function getGalleryVideos(): Promise<GalleryVideo[]> {
-  const local = getLocalVideos();
-  if (local.length === 0 || isVideosCacheStale()) {
-    syncVideosFromSheets();
-  }
-  return local;
+  syncVideosFromSheets().catch(() => {});
+  return getLocalVideos();
 }
 
 export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {

@@ -2,7 +2,7 @@ import { APPS_SCRIPT_URL } from "@/lib/sheets";
 import { getOffers } from "@/lib/offersStore";
 
 const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
-const CACHE_KEY = "me_coupons_v2";
+const CACHE_KEY = "me_coupons_v4";
 const CACHE_TS_KEY = "me_coupons_ts";
 const LAST_EDIT_KEY = "me_coupons_last_edit_ts";
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -16,17 +16,18 @@ export interface Coupon {
   description?: string;
 }
 
-const DEFAULT_COUPONS: Coupon[] = [
-  { id: "c_default_1", code: "MUSCLEMPIRE25", discount: 25, plans: [], enabled: true, description: "New Member Special 25% OFF" },
-  { id: "c_default_2", code: "CROSSFIT20", discount: 20, plans: [], enabled: true, description: "CrossFit Power Pass 20% OFF" },
-  { id: "c_default_3", code: "FEMALEFIT", discount: 20, plans: [], enabled: true, description: "Women's Transformation Deal 20% OFF" },
-  { id: "c_default_4", code: "WELCOME10", discount: 10, plans: [], enabled: true, description: "Welcome Discount 10% OFF" },
-];
+const DEFAULT_COUPONS: Coupon[] = [];
 
 // ── localStorage (instant read/write) ───────────────────────────────────────
 
 function readCache(): Coupon[] {
   try {
+    try {
+      localStorage.removeItem("me_coupons_v3");
+      localStorage.removeItem("me_coupons_v2");
+      localStorage.removeItem("me_coupons_v1");
+      localStorage.removeItem("me_coupons");
+    } catch {}
     const item = localStorage.getItem(CACHE_KEY);
     if (item === null) return [];
     return JSON.parse(item);
@@ -104,6 +105,7 @@ function pushToSheets(coupons: Coupon[]): void {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function getCoupons(): Coupon[] {
+  pullFromSheets().catch(() => {});
   return readCache();
 }
 
