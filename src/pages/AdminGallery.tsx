@@ -76,13 +76,11 @@ function getThumb(url: string): string | null {
 
   const handleRemove = async (id: string) => {
     if (activeTab === "photos") {
+      setImages(prev => prev.filter(i => i.id !== id));
       await removeGalleryImage(id);
-      const list = await getGalleryImages();
-      setImages(list);
     } else {
+      setVideos(prev => prev.filter(v => v.id !== id));
       await removeGalleryVideo(id);
-      const list = await getGalleryVideos();
-      setVideos(list);
     }
   };
 

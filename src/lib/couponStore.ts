@@ -86,7 +86,7 @@ export async function pullFromSheets(retry = 1): Promise<Coupon[]> {
   return readCache();
 }
 
-function pushToSheets(coupons: Coupon[]): void {
+async function pushToSheets(coupons: Coupon[]): Promise<boolean> {
   const dataStr = JSON.stringify(coupons);
   const qs = new URLSearchParams({
     action: "saveCoupons",
@@ -95,11 +95,17 @@ function pushToSheets(coupons: Coupon[]): void {
     _t: String(Date.now())
   }).toString();
 
-  fetch(`${APPS_SCRIPT_URL}?${qs}`, {
-    method: "GET",
-    redirect: "follow",
-    cache: "no-store"
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, {
+      method: "GET",
+      redirect: "follow",
+      cache: "no-store"
+    });
+    await res.text();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ const IMAGES_KEY = "me_gallery_images_v4";
 const IMAGES_TS_KEY = "me_gallery_images_ts";
 const VIDEOS_KEY = "me_gallery_videos_v4";
 const VIDEOS_TS_KEY = "me_gallery_videos_ts";
+const LAST_EDIT_KEY = "me_gallery_last_edit_ts";
 const CACHE_TTL = 60 * 1000; // 1 min
 
 export interface GalleryImage { id: string; src: string; alt: string; }
@@ -39,6 +40,15 @@ export function dedupeVideos(videos: GalleryVideo[]): GalleryVideo[] {
 
 // ── localStorage helpers ─────────────────────────────────────────────────────
 
+function recordLocalEdit(): void {
+  localStorage.setItem(LAST_EDIT_KEY, String(Date.now()));
+}
+
+function isRecentLocalEdit(): boolean {
+  const ts = parseInt(localStorage.getItem(LAST_EDIT_KEY) || "0", 10);
+  return Date.now() - ts < 15_000; // Skip sheet overwrite for 15s after user edit
+}
+
 function getLocalImages(): GalleryImage[] {
   try {
     try {
@@ -50,13 +60,11 @@ function getLocalImages(): GalleryImage[] {
     return dedupeImages(JSON.parse(localStorage.getItem(IMAGES_KEY) || "[]"));
   } catch { return []; }
 }
+
 function saveLocalImages(images: GalleryImage[]): void {
   const deduped = dedupeImages(images);
   localStorage.setItem(IMAGES_KEY, JSON.stringify(deduped));
   localStorage.setItem(IMAGES_TS_KEY, String(Date.now()));
-}
-function isImagesCacheStale(): boolean {
-  return Date.now() - parseInt(localStorage.getItem(IMAGES_TS_KEY) || "0", 10) > CACHE_TTL;
 }
 
 function getLocalVideos(): GalleryVideo[] {
@@ -70,13 +78,11 @@ function getLocalVideos(): GalleryVideo[] {
     return dedupeVideos(JSON.parse(localStorage.getItem(VIDEOS_KEY) || "[]"));
   } catch { return []; }
 }
+
 function saveLocalVideos(videos: GalleryVideo[]): void {
   const deduped = dedupeVideos(videos);
   localStorage.setItem(VIDEOS_KEY, JSON.stringify(deduped));
   localStorage.setItem(VIDEOS_TS_KEY, String(Date.now()));
-}
-function isVideosCacheStale(): boolean {
-  return Date.now() - parseInt(localStorage.getItem(VIDEOS_TS_KEY) || "0", 10) > CACHE_TTL;
 }
 
 // ── Sheets ────────────────────────────────────────────────────────────────────
@@ -97,10 +103,16 @@ async function fetchImagesFromSheets(retry = 1): Promise<GalleryImage[] | null> 
   return null;
 }
 
-function saveImagesToSheets(images: GalleryImage[]): void {
+async function saveImagesToSheets(images: GalleryImage[]): Promise<boolean> {
   const dataStr = JSON.stringify(dedupeImages(images));
   const qs = new URLSearchParams({ action: "saveImages", token: T, data: dataStr, _t: String(Date.now()) }).toString();
-  fetch(`${APPS_SCRIPT_URL}?${qs}`, { method: "GET", redirect: "follow", cache: "no-store" }).catch(() => {});
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, { method: "GET", redirect: "follow", cache: "no-store" });
+    await res.text();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function fetchVideosFromSheets(retry = 1): Promise<GalleryVideo[] | null> {
@@ -119,99 +131,114 @@ async function fetchVideosFromSheets(retry = 1): Promise<GalleryVideo[] | null> 
   return null;
 }
 
-function saveVideosToSheets(videos: GalleryVideo[]): void {
+async function saveVideosToSheets(videos: GalleryVideo[]): Promise<boolean> {
   const dataStr = JSON.stringify(dedupeVideos(videos));
   const qs = new URLSearchParams({ action: "saveVideos", token: T, data: dataStr, _t: String(Date.now()) }).toString();
-  fetch(`${APPS_SCRIPT_URL}?${qs}`, { method: "GET", redirect: "follow", cache: "no-store" }).catch(() => {});
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, { method: "GET", redirect: "follow", cache: "no-store" });
+    await res.text();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Public API — Images ──────────────────────────────────────────────────────
 
 export async function getGalleryImages(): Promise<GalleryImage[]> {
-  syncImagesFromSheets().catch(() => {});
+  if (!isRecentLocalEdit()) {
+    syncImagesFromSheets().catch(() => {});
+  }
   return getLocalImages();
 }
 
 export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
+  if (isRecentLocalEdit()) {
+    return getLocalImages();
+  }
   const remote = await fetchImagesFromSheets();
   if (remote !== null) {
-    const deduped = dedupeImages(remote);
-    saveLocalImages(deduped);
-    if (deduped.length < remote.length) {
-      saveImagesToSheets(deduped);
+    if (!isRecentLocalEdit()) {
+      const deduped = dedupeImages(remote);
+      saveLocalImages(deduped);
+      if (deduped.length < remote.length) {
+        saveImagesToSheets(deduped);
+      }
+      window.dispatchEvent(new CustomEvent("galleryUpdated"));
+      return deduped;
     }
-    window.dispatchEvent(new CustomEvent("galleryUpdated"));
-    return deduped;
   }
   return getLocalImages();
 }
 
 export async function addGalleryImage(src: string, alt: string): Promise<void> {
   if (src.startsWith("data:")) throw new Error("Use a URL (imgbb.com) instead of uploading a file.");
-  // Pull fresh first to avoid duplicates
-  const remote = await fetchImagesFromSheets();
-  const current = dedupeImages(remote ?? getLocalImages());
+  recordLocalEdit();
+  const current = getLocalImages();
   const normSrc = src.trim().toLowerCase();
-  // Check for duplicate src
   if (current.find(i => i.src.trim().toLowerCase() === normSrc)) return;
   current.push({ id: Date.now().toString(), src: src.trim(), alt: alt.trim() });
   const deduped = dedupeImages(current);
   saveLocalImages(deduped);
-  saveImagesToSheets(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
+  await saveImagesToSheets(deduped);
 }
 
 export async function removeGalleryImage(id: string): Promise<void> {
-  // Pull fresh from Sheets first, then remove
-  const remote = await fetchImagesFromSheets();
-  const current = (remote ?? getLocalImages()).filter(i => i.id !== id);
+  recordLocalEdit();
+  const current = getLocalImages().filter(i => i.id !== id);
   const deduped = dedupeImages(current);
   saveLocalImages(deduped);
-  saveImagesToSheets(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
+  await saveImagesToSheets(deduped);
 }
 
 // ── Public API — Videos ──────────────────────────────────────────────────────
 
 export async function getGalleryVideos(): Promise<GalleryVideo[]> {
-  syncVideosFromSheets().catch(() => {});
+  if (!isRecentLocalEdit()) {
+    syncVideosFromSheets().catch(() => {});
+  }
   return getLocalVideos();
 }
 
 export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
+  if (isRecentLocalEdit()) {
+    return getLocalVideos();
+  }
   const remote = await fetchVideosFromSheets();
   if (remote !== null) {
-    const deduped = dedupeVideos(remote);
-    saveLocalVideos(deduped);
-    if (deduped.length < remote.length) {
-      saveVideosToSheets(deduped);
+    if (!isRecentLocalEdit()) {
+      const deduped = dedupeVideos(remote);
+      saveLocalVideos(deduped);
+      if (deduped.length < remote.length) {
+        saveVideosToSheets(deduped);
+      }
+      window.dispatchEvent(new CustomEvent("galleryUpdated"));
+      return deduped;
     }
-    window.dispatchEvent(new CustomEvent("galleryUpdated"));
-    return deduped;
   }
   return getLocalVideos();
 }
 
 export async function addGalleryVideo(src: string, alt: string, thumbnail?: string): Promise<void> {
   if (src.startsWith("data:")) throw new Error("Use a URL instead of uploading a file.");
-  const remote = await fetchVideosFromSheets();
-  const current = dedupeVideos(remote ?? getLocalVideos());
+  recordLocalEdit();
+  const current = getLocalVideos();
   const normSrc = src.trim().toLowerCase();
   if (current.find(v => v.src.trim().toLowerCase() === normSrc)) return;
   current.push({ id: Date.now().toString(), src: src.trim(), alt: alt.trim(), thumbnail });
   const deduped = dedupeVideos(current);
   saveLocalVideos(deduped);
-  saveVideosToSheets(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
+  await saveVideosToSheets(deduped);
 }
 
 export async function removeGalleryVideo(id: string): Promise<void> {
-  const remote = await fetchVideosFromSheets();
-  const current = (remote ?? getLocalVideos()).filter(v => v.id !== id);
+  recordLocalEdit();
+  const current = getLocalVideos().filter(v => v.id !== id);
   const deduped = dedupeVideos(current);
   saveLocalVideos(deduped);
-  saveVideosToSheets(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
+  await saveVideosToSheets(deduped);
 }
-
-

@@ -72,7 +72,7 @@ export async function pullOffersFromSheets(retry = 1): Promise<Offer[]> {
   return readCache();
 }
 
-function pushToSheets(offers: Offer[]): void {
+async function pushToSheets(offers: Offer[]): Promise<boolean> {
   const stripped = offers.map(o => ({
     ...o,
     image: o.image?.startsWith("data:") ? "" : (o.image || ""),
@@ -85,11 +85,17 @@ function pushToSheets(offers: Offer[]): void {
     _t: String(Date.now())
   }).toString();
 
-  fetch(`${APPS_SCRIPT_URL}?${qs}`, {
-    method: "GET",
-    redirect: "follow",
-    cache: "no-store"
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, {
+      method: "GET",
+      redirect: "follow",
+      cache: "no-store"
+    });
+    await res.text();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
