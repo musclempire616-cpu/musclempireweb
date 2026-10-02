@@ -7,7 +7,6 @@ const IMAGES_TS_KEY = "me_gallery_images_ts";
 const VIDEOS_KEY = "me_gallery_videos_v4";
 const VIDEOS_TS_KEY = "me_gallery_videos_ts";
 const LAST_EDIT_KEY = "me_gallery_last_edit_ts";
-const CACHE_TTL = 60 * 1000; // 1 min
 
 export interface GalleryImage { id: string; src: string; alt: string; }
 export interface GalleryVideo { id: string; src: string; alt: string; thumbnail?: string; }
@@ -162,7 +161,7 @@ export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
       const deduped = dedupeImages(remote);
       saveLocalImages(deduped);
       if (deduped.length < remote.length) {
-        saveImagesToSheets(deduped);
+        saveImagesToSheets(deduped).catch(() => {});
       }
       window.dispatchEvent(new CustomEvent("galleryUpdated"));
       return deduped;
@@ -171,7 +170,7 @@ export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
   return getLocalImages();
 }
 
-export async function addGalleryImage(src: string, alt: string): Promise<void> {
+export function addGalleryImage(src: string, alt: string): void {
   if (src.startsWith("data:")) throw new Error("Use a URL (imgbb.com) instead of uploading a file.");
   recordLocalEdit();
   const current = getLocalImages();
@@ -181,16 +180,16 @@ export async function addGalleryImage(src: string, alt: string): Promise<void> {
   const deduped = dedupeImages(current);
   saveLocalImages(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
-  await saveImagesToSheets(deduped);
+  saveImagesToSheets(deduped).catch(() => {});
 }
 
-export async function removeGalleryImage(id: string): Promise<void> {
+export function removeGalleryImage(id: string): void {
   recordLocalEdit();
   const current = getLocalImages().filter(i => i.id !== id);
   const deduped = dedupeImages(current);
   saveLocalImages(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
-  await saveImagesToSheets(deduped);
+  saveImagesToSheets(deduped).catch(() => {});
 }
 
 // ── Public API — Videos ──────────────────────────────────────────────────────
@@ -212,7 +211,7 @@ export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
       const deduped = dedupeVideos(remote);
       saveLocalVideos(deduped);
       if (deduped.length < remote.length) {
-        saveVideosToSheets(deduped);
+        saveVideosToSheets(deduped).catch(() => {});
       }
       window.dispatchEvent(new CustomEvent("galleryUpdated"));
       return deduped;
@@ -221,7 +220,7 @@ export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
   return getLocalVideos();
 }
 
-export async function addGalleryVideo(src: string, alt: string, thumbnail?: string): Promise<void> {
+export function addGalleryVideo(src: string, alt: string, thumbnail?: string): void {
   if (src.startsWith("data:")) throw new Error("Use a URL instead of uploading a file.");
   recordLocalEdit();
   const current = getLocalVideos();
@@ -231,14 +230,14 @@ export async function addGalleryVideo(src: string, alt: string, thumbnail?: stri
   const deduped = dedupeVideos(current);
   saveLocalVideos(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
-  await saveVideosToSheets(deduped);
+  saveVideosToSheets(deduped).catch(() => {});
 }
 
-export async function removeGalleryVideo(id: string): Promise<void> {
+export function removeGalleryVideo(id: string): void {
   recordLocalEdit();
   const current = getLocalVideos().filter(v => v.id !== id);
   const deduped = dedupeVideos(current);
   saveLocalVideos(deduped);
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
-  await saveVideosToSheets(deduped);
+  saveVideosToSheets(deduped).catch(() => {});
 }

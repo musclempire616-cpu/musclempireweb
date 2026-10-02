@@ -47,8 +47,6 @@ function getThumb(url: string): string | null {
   useEffect(() => {
     getGalleryImages().then(setImages);
     getGalleryVideos().then(setVideos);
-    syncImagesFromSheets().then(setImages);
-    syncVideosFromSheets().then(setVideos);
     const handler = () => {
       getGalleryImages().then(setImages);
       getGalleryVideos().then(setVideos);
@@ -57,16 +55,12 @@ function getThumb(url: string): string | null {
     return () => window.removeEventListener("galleryUpdated", handler);
   }, []);
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!newSrc.trim()) return;
     if (activeTab === "photos") {
-      await addGalleryImage(newSrc.trim(), newAlt.trim() || "Gallery image");
-      const list = await getGalleryImages();
-      setImages(list);
+      addGalleryImage(newSrc.trim(), newAlt.trim() || "Gallery image");
     } else {
-      await addGalleryVideo(newSrc.trim(), newAlt.trim() || "Gallery video", newThumb.trim() || undefined);
-      const list = await getGalleryVideos();
-      setVideos(list);
+      addGalleryVideo(newSrc.trim(), newAlt.trim() || "Gallery video", newThumb.trim() || undefined);
     }
     setNewSrc("");
     setNewAlt("");
@@ -74,13 +68,11 @@ function getThumb(url: string): string | null {
     setShowAdd(false);
   };
 
-  const handleRemove = async (id: string) => {
+  const handleRemove = (id: string) => {
     if (activeTab === "photos") {
-      setImages(prev => prev.filter(i => i.id !== id));
-      await removeGalleryImage(id);
+      removeGalleryImage(id);
     } else {
-      setVideos(prev => prev.filter(v => v.id !== id));
-      await removeGalleryVideo(id);
+      removeGalleryVideo(id);
     }
   };
 
