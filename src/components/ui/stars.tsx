@@ -22,6 +22,7 @@ export const StarsBackground: React.FC<StarsBackgroundProps> = ({
     if (!ctx) return;
 
     let animationFrameId: number;
+    let isVisible = true;
     let stars: { x: number; y: number; radius: number; vx: number; vy: number }[] = [];
 
     const resize = () => {
@@ -32,7 +33,9 @@ export const StarsBackground: React.FC<StarsBackgroundProps> = ({
 
     const initStars = () => {
       stars = [];
-      const numStars = (canvas.width * canvas.height) / 2000;
+      const isMobile = window.innerWidth < 768;
+      const maxStars = isMobile ? 25 : 75;
+      const numStars = Math.min(maxStars, Math.floor((canvas.width * canvas.height) / 4000));
       for (let i = 0; i < numStars; i++) {
         stars.push({
           x: Math.random() * canvas.width,
@@ -45,6 +48,7 @@ export const StarsBackground: React.FC<StarsBackgroundProps> = ({
     };
 
     const draw = () => {
+      if (!isVisible) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
       
@@ -65,11 +69,19 @@ export const StarsBackground: React.FC<StarsBackgroundProps> = ({
       animationFrameId = requestAnimationFrame(draw);
     };
 
+    const observer = new IntersectionObserver(([entry]) => {
+      isVisible = entry.isIntersecting;
+      if (isVisible) draw();
+    }, { threshold: 0.1 });
+
+    observer.observe(canvas);
+
     window.addEventListener("resize", resize);
     resize();
     draw();
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };

@@ -91,8 +91,10 @@ function DesktopCarousel({ items }: { items: typeof SERVICES }) {
       let d = targetF.current - activeF.current;
       while (d >  N/2) d -= N;
       while (d < -N/2) d += N;
-      activeF.current += d * 0.1;
-      setRender(activeF.current);
+      if (Math.abs(d) > 0.0005) {
+        activeF.current += d * 0.1;
+        setRender(activeF.current);
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -228,15 +230,17 @@ export default function Services() {
 
   return (
     <section id="services" className="py-20 bg-[#1C1C1E] overflow-hidden relative">
-      {/* MagicRings WebGL background */}
-      <div className="absolute inset-0 z-0 pointer-events-none" style={{ opacity: 0.32 }}>
-        <MagicRings
-          color="#E8A820" colorTwo="#ffffff" ringCount={5} speed={0.5} attenuation={9}
-          lineThickness={1.6} baseRadius={0.28} radiusStep={0.11} scaleRate={0.1} opacity={1}
-          blur={0} noiseAmount={0} rotation={0} ringGap={1.6} fadeIn={0.7} fadeOut={0.5}
-          followMouse={false} hoverScale={1} parallax={0} clickBurst={false}
-        />
-      </div>
+      {/* MagicRings WebGL background - Desktop only for smooth mobile performance */}
+      {!isMobile && (
+        <div className="absolute inset-0 z-0 pointer-events-none" style={{ opacity: 0.32 }}>
+          <MagicRings
+            color="#E8A820" colorTwo="#ffffff" ringCount={5} speed={0.5} attenuation={9}
+            lineThickness={1.6} baseRadius={0.28} radiusStep={0.11} scaleRate={0.1} opacity={1}
+            blur={0} noiseAmount={0} rotation={0} ringGap={1.6} fadeIn={0.7} fadeOut={0.5}
+            followMouse={false} hoverScale={1} parallax={0} clickBurst={false}
+          />
+        </div>
+      )}
 
       <motion.div initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }}
         viewport={{ once:true, margin:"-60px" }} transition={{ duration:0.65, ease:[0.16,1,0.3,1] }}
