@@ -24,11 +24,7 @@ export default function PlanNavbar() {
   }, []);
 
   const handleBack = () => {
-    if (location.startsWith("/products/")) {
-      navigate("/products");
-    } else {
-      navigate("/");
-    }
+    navigate("/");
   };
 
   return (

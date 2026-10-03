@@ -10,8 +10,6 @@ import GlobalMenu from "@/components/GlobalMenu";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Home = lazy(() => import("@/pages/Home"));
-const Products = lazy(() => import("@/pages/Products"));
-const ProductDetail = lazy(() => import("@/pages/ProductDetail"));
 const NutritionAssessment = lazy(() => import("@/pages/NutritionAssessment"));
 const Offers = lazy(() => import("@/pages/Offers"));
 const AdminLogin = lazy(() => import("@/pages/AdminLogin"));
@@ -116,8 +114,6 @@ function Router() {
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-black text-white">Loading...</div>}>
       <Switch>
         <Route path="/" component={Home} />
-        <Route path="/products" component={Products} />
-        <Route path="/products/:id" component={ProductDetail} />
         <Route path="/nutrition" component={NutritionAssessment} />
         <Route path="/offers" component={Offers} />
         <Route path="/terms" component={TermsPage} />
