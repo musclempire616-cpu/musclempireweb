@@ -7,6 +7,7 @@ import FloatingContact from "@/components/FloatingContact";
 import DemoBar from "@/components/DemoBar";
 import OfferPopup from "@/components/OfferPopup";
 import GlobalMenu from "@/components/GlobalMenu";
+import SEOManager from "@/components/SEOManager";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -137,6 +138,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <SEOManager />
           <AdminShortcut />
           <ScrollRestoration />
           <Router />
