@@ -44,6 +44,11 @@ const SEO_ROUTES = {
       "Read the terms and conditions for using the Muscle Empire Gymnasium website and its services.",
     url: "https://www.musclempire.in/terms",
   },
+  "/sagarkharat": {
+    title: "Admin Portal – Muscle Empire Gymnasium",
+    description: "Private Admin Portal for Muscle Empire Gymnasium.",
+    noindex: true,
+  },
 };
 
 function escapeHtml(str) {
@@ -90,21 +95,28 @@ function processRoute(templateHtml, routePath, seo) {
 
   // 2. Update Meta Description & Robots
   html = setMetaTag(html, "name", "description", seo.description);
-  html = setMetaTag(html, "name", "robots", "index, follow");
 
-  // 3. Update Open Graph Tags
-  html = setMetaTag(html, "property", "og:title", seo.title);
-  html = setMetaTag(html, "property", "og:description", seo.description);
-  html = setMetaTag(html, "property", "og:type", "website");
-  html = setMetaTag(html, "property", "og:url", seo.url);
+  if (seo.noindex) {
+    html = setMetaTag(html, "name", "robots", "noindex, nofollow");
+    // Remove canonical tag if present for noindex routes
+    html = html.replace(/<link\s+[^>]*?rel=["']canonical["'][^>]*?>\s*/gi, "");
+  } else {
+    html = setMetaTag(html, "name", "robots", "index, follow");
 
-  // 4. Update Twitter Cards
-  html = setMetaTag(html, "name", "twitter:card", "summary_large_image");
-  html = setMetaTag(html, "name", "twitter:title", seo.title);
-  html = setMetaTag(html, "name", "twitter:description", seo.description);
+    // 3. Update Open Graph Tags
+    html = setMetaTag(html, "property", "og:title", seo.title);
+    html = setMetaTag(html, "property", "og:description", seo.description);
+    html = setMetaTag(html, "property", "og:type", "website");
+    if (seo.url) html = setMetaTag(html, "property", "og:url", seo.url);
 
-  // 5. Update Canonical Link
-  html = setCanonicalTag(html, seo.url);
+    // 4. Update Twitter Cards
+    html = setMetaTag(html, "name", "twitter:card", "summary_large_image");
+    html = setMetaTag(html, "name", "twitter:title", seo.title);
+    html = setMetaTag(html, "name", "twitter:description", seo.description);
+
+    // 5. Update Canonical Link
+    if (seo.url) html = setCanonicalTag(html, seo.url);
+  }
 
   return html;
 }
