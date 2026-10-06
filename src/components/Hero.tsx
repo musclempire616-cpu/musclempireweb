@@ -65,9 +65,9 @@ export default function Hero() {
               style={{ background: "rgba(255,255,255,0.06)" }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#E8A820] animate-pulse" />
-              <span className="text-[#E8A820] text-[13px] lg:text-[14px] font-bold uppercase tracking-[0.18em]">
+              <h2 className="text-[#E8A820] text-[13px] lg:text-[14px] font-bold uppercase tracking-[0.18em]">
                 Ghatkopar's elite arena
-              </span>
+              </h2>
             </motion.div>
 
             <motion.p
@@ -113,7 +113,7 @@ export default function Hero() {
           {/* RIGHT — headline with varied sizes */}
           <div className="order-1 lg:order-2 flex flex-col justify-end gap-8 lg:pb-28 lg:pl-24 overflow-visible">
 
-            <motion.div
+            <motion.h1
               initial={{ opacity: 0, y: 32 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.08, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
@@ -144,7 +144,7 @@ export default function Hero() {
                 your life.
               </div>
 
-            </motion.div>
+            </motion.h1>
 
 
           </div>
