@@ -7,7 +7,7 @@ import { GradientBackground } from "@/components/ui/desert-horizon";
 import CouponClaimModal from "@/components/CouponClaimModal";
 
 import { getOffers, pullOffersFromSheets } from "@/lib/offersStore";
-import chalkboardBg from "@/assets/images/chalkboard-bg.png";
+import chalkboardBg from "@/assets/images/chalkboard-bg.webp";
 
 const upcomingOffers: Offer[] = [];
 

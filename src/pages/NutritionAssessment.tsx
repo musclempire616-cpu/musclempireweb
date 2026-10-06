@@ -12,7 +12,7 @@ type Meal = {
   time: string;
   food: string;
 };
-import chalkboardBg from "@/assets/images/chalkboard-bg.png";
+import chalkboardBg from "@/assets/images/chalkboard-bg.webp";
 import { StarsBackground } from "@/components/ui/stars";
 import { CheckCircle2, User, Scale, Heart, Utensils, Target, FileText, Clock, ChevronRight, ChevronLeft, ChevronUp, ChevronDown } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";

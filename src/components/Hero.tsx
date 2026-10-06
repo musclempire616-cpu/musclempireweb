@@ -1,5 +1,5 @@
 import { motion, useScroll, useTransform, useMotionValue } from "framer-motion";
-import heroBg from "@/assets/images/hero-bg.png";
+import heroBg from "@/assets/images/hero-bg.webp";
 
 export default function Hero() {
   const { scrollY } = useScroll();
@@ -33,6 +33,8 @@ export default function Hero() {
           src={heroBg}
           alt="Muscle Empire"
           fetchPriority="high"
+          width={1920}
+          height={1080}
           className="absolute inset-0 w-full h-full object-cover object-center"
         />
       </div>

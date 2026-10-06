@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import aboutImg from "@/assets/images/about-img.png";
+import aboutImg from "@/assets/images/about-img.webp";
 
 /* ────────────────────────────────────────────────────────────────
    DATA
@@ -276,6 +276,9 @@ export default function About() {
               <img
                 src={aboutImg}
                 alt="Sagar Kharat — champion athlete and founder"
+                width={600}
+                height={800}
+                loading="lazy"
                 className="w-full object-cover filter grayscale group-hover:grayscale-0 transition-all duration-700"
               />
               <div className="absolute bottom-0 inset-x-0 h-2/5 bg-gradient-to-t from-black/70 to-transparent z-20" />

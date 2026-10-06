@@ -1,5 +1,5 @@
 import { FaInstagram, FaFacebookF } from "react-icons/fa";
-import logo from "@/assets/images/logo-footer.png";
+import logo from "@/assets/images/logo-footer.webp";
 
 const quickLinks = [
   { href: "/branches", label: "Branches" },
@@ -30,6 +30,9 @@ export default function Footer() {
               <img
                 src={logo}
                 alt="Muscle Empire"
+                width={80}
+                height={80}
+                loading="lazy"
                 className="h-20 w-20 object-contain"
               />
               <span className="font-display font-black text-[1.05rem] text-[#C8900A] tracking-tight">
@@ -41,14 +44,15 @@ export default function Footer() {
             </p>
             <div className="flex gap-2.5">
               {[
-                { href: "https://www.instagram.com/musclempire_15", Icon: FaInstagram },
-                { href: "https://www.facebook.com/musclemmpire",    Icon: FaFacebookF },
-              ].map(({ href, Icon }) => (
+                { href: "https://www.instagram.com/musclempire_15", Icon: FaInstagram, label: "Follow Muscle Empire on Instagram" },
+                { href: "https://www.facebook.com/musclemmpire",    Icon: FaFacebookF, label: "Follow Muscle Empire on Facebook" },
+              ].map(({ href, Icon, label }) => (
                 <a
                   key={href}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={label}
                   className="w-9 h-9 rounded-xl bg-black/[0.05] flex items-center justify-center text-black hover:text-black hover:bg-black/[0.10] transition-all duration-200"
                 >
                   <Icon size={16} />

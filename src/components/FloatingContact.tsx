@@ -65,7 +65,7 @@ function WhatsAppForm({ onClose }: { onClose: () => void }) {
             <FaWhatsapp size={20} className="text-white" />
             <span className="text-white font-bold text-[0.9rem] tracking-wide">WhatsApp us</span>
           </div>
-          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F7F6F3]/10">
+          <button onClick={onClose} aria-label="Close form" className="text-white/70 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F7F6F3]/10">
             <X size={18} />
           </button>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import logo from "@/assets/images/logo.png";
+import logo from "@/assets/images/logo.webp";
 
 export default function Navbar() {
   const [nameVisible, setNameVisible] = useState(true);
@@ -30,6 +30,7 @@ export default function Navbar() {
     >
       <a
         href="/"
+        aria-label="Muscle Empire Home"
         onClick={e => { e.preventDefault(); navigate("/"); }}
         className="flex items-center gap-3 group select-none"
       >
@@ -37,6 +38,8 @@ export default function Navbar() {
           <img
             src={logo}
             alt="Muscle Empire"
+            width={96}
+            height={96}
             className="relative h-24 w-24 object-contain"
           />
         </div>

@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import AdminGuard from "@/components/AdminGuard";
 import { logout } from "@/lib/adminAuth";
 import { getSelectedAssessment, clearSelectedAssessment } from "@/lib/adminStore";
-import logoPng from "@/assets/images/logo-footer.png";
+import logoPng from "@/assets/images/logo-footer.webp";
 
 // Bottom fields — Suggestion only (fixed)
 const EXTRA_FIELDS = [

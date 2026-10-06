@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
-import heroBg from "@/assets/images/hero-bg.png";
+import heroBg from "@/assets/images/hero-bg.webp";
 import { FEATURES } from "@/components/WhyChooseUs";
 
 const IMAGES_TO_PRELOAD = [heroBg, ...FEATURES.map((f) => f.src)];
