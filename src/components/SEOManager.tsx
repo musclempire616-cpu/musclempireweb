@@ -41,6 +41,8 @@ const SEO_MAP: Record<string, SEOData> = {
 
 const DEFAULT_SEO: SEOData = SEO_MAP["/"];
 
+const CANONICAL_BASE = "https://www.musclempire.in";
+
 function setMetaTag(attrName: "name" | "property", attrValue: string, content: string) {
   let element = document.querySelector(`meta[${attrName}="${attrValue}"]`);
   if (!element) {
@@ -49,6 +51,20 @@ function setMetaTag(attrName: "name" | "property", attrValue: string, content: s
     document.head.appendChild(element);
   }
   element.setAttribute("content", content);
+}
+
+function setCanonicalTag(url: string | null) {
+  let link = document.querySelector('link[rel="canonical"]');
+  if (url) {
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
+    }
+    link.setAttribute("href", url);
+  } else if (link) {
+    link.remove();
+  }
 }
 
 export default function SEOManager() {
@@ -63,6 +79,7 @@ export default function SEOManager() {
     if (cleanPath.startsWith("/sagarkharat")) {
       document.title = "Admin Portal – Muscle Empire Gymnasium";
       setMetaTag("name", "robots", "noindex, nofollow");
+      setCanonicalTag(null);
       return;
     }
 
@@ -75,12 +92,14 @@ export default function SEOManager() {
     setMetaTag("name", "description", seo.description);
     setMetaTag("name", "robots", "index, follow");
 
+    // Update Canonical URL
+    const canonicalUrl = cleanPath === "/" ? `${CANONICAL_BASE}/` : `${CANONICAL_BASE}${cleanPath}`;
+    setCanonicalTag(canonicalUrl);
+
     // Update Open Graph (OG) Tags
     setMetaTag("property", "og:title", seo.title);
     setMetaTag("property", "og:description", seo.description);
-    if (typeof window !== "undefined") {
-      setMetaTag("property", "og:url", window.location.origin + cleanPath);
-    }
+    setMetaTag("property", "og:url", canonicalUrl);
 
     // Update Twitter Card Tags
     setMetaTag("name", "twitter:title", seo.title);

@@ -73,6 +73,15 @@ function updateTitle(html, title) {
   return html.replace("</head>", `    ${newTitle}\n  </head>`);
 }
 
+function setCanonicalTag(html, url) {
+  const regex = /<link\s+[^>]*?rel=["']canonical["'][^>]*?>/gi;
+  const newTag = `<link rel="canonical" href="${url}" />`;
+  if (regex.test(html)) {
+    return html.replace(regex, newTag);
+  }
+  return html.replace("</head>", `    ${newTag}\n  </head>`);
+}
+
 function processRoute(templateHtml, routePath, seo) {
   let html = templateHtml;
 
@@ -93,6 +102,9 @@ function processRoute(templateHtml, routePath, seo) {
   html = setMetaTag(html, "name", "twitter:card", "summary_large_image");
   html = setMetaTag(html, "name", "twitter:title", seo.title);
   html = setMetaTag(html, "name", "twitter:description", seo.description);
+
+  // 5. Update Canonical Link
+  html = setCanonicalTag(html, seo.url);
 
   return html;
 }
