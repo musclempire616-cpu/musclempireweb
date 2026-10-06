@@ -2,15 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "cleanUrls": true,
   "rewrites": [
-    { "source": "/branches", "destination": "/branches.html" },
-    { "source": "/offers", "destination": "/offers.html" },
-    { "source": "/nutrition", "destination": "/nutrition.html" },
-    { "source": "/gallery", "destination": "/gallery.html" },
-    { "source": "/terms", "destination": "/terms.html" },
-    { "source": "/sagarkharat", "destination": "/sagarkharat.html" },
-    { "source": "/sagarkharat/:path*", "destination": "/index.html" },
-    { "source": "/:path*", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
