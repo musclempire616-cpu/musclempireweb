@@ -2,7 +2,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "cleanUrls": true,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/branches", "destination": "/branches.html" },
+    { "source": "/offers", "destination": "/offers.html" },
+    { "source": "/nutrition", "destination": "/nutrition.html" },
+    { "source": "/gallery", "destination": "/gallery.html" },
+    { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/((?!branches|offers|nutrition|gallery|terms).*)", "destination": "/index.html" }
   ]
 }

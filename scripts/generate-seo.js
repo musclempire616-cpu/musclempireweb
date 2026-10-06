@@ -113,13 +113,20 @@ function prerenderSEO() {
       fs.writeFileSync(indexPath, outputHtml, "utf8");
       console.log(`[SEO Prerender] Generated static HTML for route: / (dist/index.html)`);
     } else {
-      const routeDir = path.join(DIST_DIR, routePath.replace(/^\//, ""));
+      const routeName = routePath.replace(/^\//, "");
+      // Write dist/routeName.html
+      const htmlFile = path.join(DIST_DIR, `${routeName}.html`);
+      fs.writeFileSync(htmlFile, outputHtml, "utf8");
+
+      // Write dist/routeName/index.html
+      const routeDir = path.join(DIST_DIR, routeName);
       if (!fs.existsSync(routeDir)) {
         fs.mkdirSync(routeDir, { recursive: true });
       }
       const targetFile = path.join(routeDir, "index.html");
       fs.writeFileSync(targetFile, outputHtml, "utf8");
-      console.log(`[SEO Prerender] Generated static HTML for route: ${routePath} (${targetFile})`);
+
+      console.log(`[SEO Prerender] Generated static HTML for route: ${routePath} (${htmlFile} and ${targetFile})`);
     }
   }
 }
