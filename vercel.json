@@ -9,6 +9,6 @@
     { "source": "/nutrition", "destination": "/nutrition.html" },
     { "source": "/gallery", "destination": "/gallery.html" },
     { "source": "/terms", "destination": "/terms.html" },
-    { "source": "/((?!branches|offers|nutrition|gallery|terms).*)", "destination": "/index.html" }
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
