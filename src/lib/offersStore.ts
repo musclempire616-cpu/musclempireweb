@@ -1,9 +1,8 @@
 import type { Offer } from "@/data/offers";
-import { activeOffers } from "@/data/offers";
 import { APPS_SCRIPT_URL } from "@/lib/sheets";
 
 const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
-const CACHE_KEY = "me_offers_v3";
+const CACHE_KEY = "me_offers_v5";
 const CACHE_TS_KEY = "me_offers_ts";
 const LAST_EDIT_KEY = "me_offers_last_edit_ts";
 const CACHE_TTL = 30_000;
@@ -11,6 +10,8 @@ const CACHE_TTL = 30_000;
 function readCache(): Offer[] {
   try {
     try {
+      localStorage.removeItem("me_offers_v4");
+      localStorage.removeItem("me_offers_v3");
       localStorage.removeItem("me_offers_v2");
       localStorage.removeItem("me_offers_v1");
     } catch {}
@@ -33,7 +34,7 @@ function recordLocalEdit(): void {
 
 function isRecentLocalEdit(): boolean {
   const ts = parseInt(localStorage.getItem(LAST_EDIT_KEY) || "0", 10);
-  return Date.now() - ts < 15_000; // Skip sheet overwrite for 15s after user edit
+  return Date.now() - ts < 15_000;
 }
 
 function isCacheStale(): boolean {
@@ -64,9 +65,8 @@ export async function pullOffersFromSheets(retry = 1): Promise<Offer[]> {
           return offers;
         }
       }
-    } catch (e) {
-      console.warn("[offersStore] pullOffersFromSheets failed attempt:", attempt, e);
-      if (attempt < retry) await new Promise(r => setTimeout(r, 800));
+    } catch {
+      if (attempt < retry) await new Promise(r => setTimeout(r, 600));
     }
   }
   return readCache();
@@ -84,17 +84,19 @@ async function pushToSheets(offers: Offer[]): Promise<boolean> {
     data: dataStr,
     _t: String(Date.now())
   }).toString();
+  const url = `${APPS_SCRIPT_URL}?${qs}`;
 
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, {
-      method: "GET",
-      redirect: "follow",
-      cache: "no-store"
-    });
+    const res = await fetch(url, { method: "GET", redirect: "follow", cache: "no-store" });
     await res.text();
     return true;
   } catch {
-    return false;
+    try {
+      await fetch(url, { method: "GET", mode: "no-cors" });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -140,8 +142,3 @@ export function updateOffer(id: string, updated: Partial<Offer>): void {
   const next = current.map(o => o.id === id ? { ...o, ...updated } : o);
   _save(next);
 }
-
-
-
-
-
