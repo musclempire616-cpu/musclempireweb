@@ -24,7 +24,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
   const [copied, setCopied] = useState(false);
   const [, navigate] = useLocation();
 
-  const couponCode = offer?.couponCode?.trim().toUpperCase() || "MUSCLEMPIRE25";
+  const couponCode = offer?.couponCode?.trim().toUpperCase() || "";
 
   useEffect(() => {
     if (isOpen && offer && couponCode) {
