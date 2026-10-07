@@ -1,4 +1,4 @@
-import { FaInstagram, FaFacebookF } from "react-icons/fa";
+import { FaInstagram, FaFacebookF, FaLinkedinIn } from "react-icons/fa";
 import logo from "@/assets/images/logo-footer.webp";
 
 const quickLinks = [
@@ -46,6 +46,7 @@ export default function Footer() {
               {[
                 { href: "https://www.instagram.com/musclempire_15", Icon: FaInstagram, label: "Follow Muscle Empire on Instagram" },
                 { href: "https://www.facebook.com/musclemmpire",    Icon: FaFacebookF, label: "Follow Muscle Empire on Facebook" },
+                { href: "https://www.linkedin.com/in/musclempire/", Icon: FaLinkedinIn, label: "Follow Muscle Empire on LinkedIn" },
               ].map(({ href, Icon, label }) => (
                 <a
                   key={href}

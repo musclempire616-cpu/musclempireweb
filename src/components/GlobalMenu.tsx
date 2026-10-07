@@ -22,7 +22,7 @@ const staggeredItems = [
 const staggeredSocials = [
   { label: "Instagram", link: "https://instagram.com" },
   { label: "YouTube", link: "https://www.youtube.com/@sagarKharat-d7g" },
-  { label: "LinkedIn", link: "https://www.linkedin.com" },
+  { label: "LinkedIn", link: "https://www.linkedin.com/in/musclempire/" },
 ];
 
 function smoothScroll(href: string) {
