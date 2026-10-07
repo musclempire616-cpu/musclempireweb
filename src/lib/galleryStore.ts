@@ -168,6 +168,9 @@ export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
     }
     const dedupedRemote = dedupeImages(remote);
     saveLocalImages(dedupedRemote);
+    if (remote.length > dedupedRemote.length) {
+      saveImagesToSheets(dedupedRemote).catch(() => {});
+    }
     window.dispatchEvent(new CustomEvent("galleryUpdated"));
     return dedupedRemote;
   }
@@ -227,6 +230,9 @@ export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
     }
     const dedupedRemote = dedupeVideos(remote);
     saveLocalVideos(dedupedRemote);
+    if (remote.length > dedupedRemote.length) {
+      saveVideosToSheets(dedupedRemote).catch(() => {});
+    }
     window.dispatchEvent(new CustomEvent("galleryUpdated"));
     return dedupedRemote;
   }
