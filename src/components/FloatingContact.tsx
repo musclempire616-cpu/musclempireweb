@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FaWhatsapp } from "react-icons/fa";
 import { Phone, X, CheckCircle2 } from "lucide-react";
 
-const OWNER_PHONE = "919773053632";
+const OWNER_PHONE = "919137870108";
 const CALL_URL = "tel:+919773053632";
 const CALL_URL_2 = "tel:+919702268603";
 

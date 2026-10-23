@@ -25,7 +25,7 @@ import PlanNavbar from "@/components/PlanNavbar";
 import Footer from "@/components/Footer";
 import { APPS_SCRIPT_URL } from "@/lib/sheets";
 
-const OWNER_PHONE = "919773053632";
+const OWNER_PHONE = "919137870108";
 
 type BranchType = "all" | "unisex" | "female";
 

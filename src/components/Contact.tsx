@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Phone, MapPin, Mail, CheckCircle2, Clock, User, Building2, FileText } from "lucide-react";
 import { APPS_SCRIPT_URL } from "@/lib/sheets";
 
-const OWNER_PHONE = "919773053632";
+const OWNER_PHONE = "919137870108";
 
 export default function Contact() {
   const [submitted, setSubmitted] = useState(false);
