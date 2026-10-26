@@ -24,7 +24,12 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
   const [copied, setCopied] = useState(false);
   const [, navigate] = useLocation();
 
-  const couponCode = offer?.couponCode?.trim().toUpperCase() || "";
+  // If offer has an assigned coupon code, use it. Otherwise create a smart fallback so it's never blank.
+  const rawCode = offer?.couponCode?.trim().toUpperCase() || "";
+  const fallbackCode = offer?.title
+    ? `${offer.title.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()}${parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 20}`
+    : "EMPIRE25";
+  const couponCode = rawCode || fallbackCode;
 
   useEffect(() => {
     if (isOpen && offer && couponCode) {
@@ -40,7 +45,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
     const discNum = parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 25;
     ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
 
-    // Most reliable cross-browser copy
+    // Cross-browser copy
     const el = document.createElement("textarea");
     el.value = couponCode;
     el.setAttribute("readonly", "");
@@ -53,7 +58,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
       document.execCommand("copy");
     } catch {}
     document.body.removeChild(el);
-    // Also try modern API in parallel
+
     if (navigator.clipboard) {
       navigator.clipboard.writeText(couponCode).catch(() => {});
     }
@@ -64,24 +69,31 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
   const handleGoToPricing = () => {
     const discNum = parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 25;
     ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
+
+    // Store in both session & local storage so it survives cross-page routing
     sessionStorage.setItem("auto_apply_coupon", couponCode);
+    localStorage.setItem("auto_apply_coupon", couponCode);
+    sessionStorage.setItem("scroll_to_hash", "#pricing");
+
+    // Clear stale scroll positions so Home scrolls directly to pricing
+    sessionStorage.removeItem("scroll_/");
+    sessionStorage.removeItem("scroll_before_plans");
+
     onClose();
 
-    // Notify Pricing component to automatically open Pricing Modal with coupon
+    // Small delay to allow modal exit animation
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("autoClaimOffer", { detail: { couponCode } }));
-    }, 100);
-
-    if (window.location.pathname === "/") {
-      const el = document.querySelector("#pricing");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth" });
+      if (window.location.pathname === "/") {
+        const el = document.getElementById("pricing");
+        if (el) {
+          const top = el.getBoundingClientRect().top + window.scrollY - 76;
+          window.scrollTo({ top, behavior: "smooth" });
+        }
+        window.dispatchEvent(new CustomEvent("autoClaimOffer", { detail: { couponCode } }));
       } else {
-        window.location.hash = "pricing";
+        navigate("/#pricing");
       }
-    } else {
-      navigate("/#pricing");
-    }
+    }, 120);
   };
 
   const handleClaimWhatsApp = () => {

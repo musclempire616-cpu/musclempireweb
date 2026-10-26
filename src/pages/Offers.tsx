@@ -6,10 +6,8 @@ import Footer from "@/components/Footer";
 import { GradientBackground } from "@/components/ui/desert-horizon";
 import CouponClaimModal from "@/components/CouponClaimModal";
 
-import { getOffers, pullOffersFromSheets } from "@/lib/offersStore";
+import { getOffers, pullOffersFromSheets, normalizeImageUrl, formatOfferDateTime } from "@/lib/offersStore";
 import chalkboardBg from "@/assets/images/chalkboard-bg.webp";
-
-const upcomingOffers: Offer[] = [];
 
 type Offer = {
   title: string;
@@ -35,6 +33,9 @@ function OfferCard({
   expired?: boolean;
   onClaim?: (offer: Offer) => void;
 }) {
+  const [imgError, setImgError] = useState(false);
+  const cleanImg = normalizeImageUrl(offer.image);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -46,11 +47,22 @@ function OfferCard({
       }`}
     >
       {/* Banner */}
-      <div className="relative h-44 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
-        {offer.image ? (
-          <img src={offer.image} alt={offer.title} className="w-full h-full object-cover" loading="lazy" />
+      <div className="relative h-44 bg-gradient-to-br from-gray-900 to-black flex items-center justify-center overflow-hidden">
+        {cleanImg && !imgError ? (
+          <img
+            src={cleanImg}
+            alt={offer.title}
+            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
         ) : (
-          <Zap size={48} className="text-gray-300" />
+          <div className="flex flex-col items-center justify-center text-center p-4">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-2">
+              <Zap size={24} className="text-amber-400" />
+            </div>
+            <span className="text-white/60 text-xs font-bold uppercase tracking-wider">{offer.title}</span>
+          </div>
         )}
         {/* Badge */}
         {expired ? (
@@ -62,7 +74,7 @@ function OfferCard({
             Coming Soon
           </span>
         ) : offer.discount ? (
-          <span className="absolute top-3 right-3 bg-gray-900 text-white text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full">
+          <span className="absolute top-3 right-3 bg-amber-500 text-black text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-md">
             {offer.discount}
           </span>
         ) : null}
@@ -84,7 +96,7 @@ function OfferCard({
               <Calendar size={13} />
               <span>
                 Launches:{" "}
-                <span className="text-gray-700 font-bold">{offer.launchDate}</span>
+                <span className="text-gray-700 font-bold">{formatOfferDateTime(offer.launchDate)}</span>
               </span>
             </>
           ) : offer.validTill ? (
@@ -92,7 +104,7 @@ function OfferCard({
               <Clock size={13} />
               <span>
                 {expired ? "Expired on: " : "Valid till: "}
-                <span className="text-gray-700 font-bold">{formatValidTill(offer.validTill)}</span>
+                <span className="text-gray-700 font-bold">{formatOfferDateTime(offer.validTill)}</span>
               </span>
             </>
           ) : null}
@@ -130,18 +142,6 @@ function EmptyState({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-// Clean up date strings like "Thu Dec 31 2026 00:00:00 GMT+0530 (India Standard Time)" → "31 Dec 2026"
-function formatValidTill(val?: string): string {
-  if (!val) return "";
-  try {
-    const d = new Date(val);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) {
-      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-    }
-  } catch {}
-  return val;
-}
-
 export default function Offers() {
   const ongoingRef = useRef<HTMLDivElement>(null);
   const upcomingRef = useRef<HTMLDivElement>(null);
@@ -161,18 +161,18 @@ export default function Offers() {
       setOngoingOffers(all.filter(o => o.status === "active").map(o => ({
         title: o.title, description: o.description, discount: o.discount,
         validTill: o.validTill, cta: o.ctaText, whatsappMessage: o.whatsappMessage,
-        image: o.image, couponCode: o.couponCode,
+        image: normalizeImageUrl(o.image), couponCode: o.couponCode,
       })));
       setUpcomingDynamicOffers(all.filter(o => o.status === "upcoming").map(o => ({
         title: o.title, description: o.description, discount: o.discount,
         validTill: o.validTill, launchDate: o.validTill, teaser: o.description,
         cta: o.ctaText, whatsappMessage: o.whatsappMessage,
-        image: o.image, couponCode: o.couponCode,
+        image: normalizeImageUrl(o.image), couponCode: o.couponCode,
       })));
       setExpiredOffers(all.filter(o => o.status === "expired").map(o => ({
         title: o.title, description: o.description, discount: o.discount,
         validTill: o.validTill, cta: o.ctaText, whatsappMessage: o.whatsappMessage,
-        image: o.image, couponCode: o.couponCode,
+        image: normalizeImageUrl(o.image), couponCode: o.couponCode,
       })));
     };
     fetchOffers();

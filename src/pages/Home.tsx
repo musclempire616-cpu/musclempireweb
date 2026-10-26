@@ -11,43 +11,54 @@ import Footer from "@/components/Footer";
 import Preloader from "@/components/Preloader";
 
 export default function Home() {
-  // Skip preloader if returning from another page (back navigation)
-  const savedScroll = sessionStorage.getItem("scroll_/") || sessionStorage.getItem("scroll_before_plans");
-  const isReturning = !!savedScroll;
+  const isAutoClaim = typeof sessionStorage !== "undefined" && (
+    !!sessionStorage.getItem("scroll_to_hash") ||
+    !!sessionStorage.getItem("auto_apply_coupon") ||
+    (typeof window !== "undefined" && window.location.hash === "#pricing")
+  );
+
+  // Skip preloader if returning or navigating with coupon/pricing hash
+  const savedScroll = isAutoClaim ? null : (sessionStorage.getItem("scroll_/") || sessionStorage.getItem("scroll_before_plans"));
+  const isReturning = !!savedScroll || isAutoClaim;
   const [loading, setLoading] = useState(!isReturning);
 
-  // Restore scroll immediately before paint when returning
+  // Restore scroll immediately before paint when returning (unless claiming an offer)
   useLayoutEffect(() => {
+    if (isAutoClaim) return;
     const pos = sessionStorage.getItem("scroll_/") || sessionStorage.getItem("scroll_before_plans");
     if (pos) window.scrollTo(0, parseInt(pos, 10));
-  }, []);
+  }, [isAutoClaim]);
 
   // After preloader / on mount
   useEffect(() => {
     if (!loading) {
-      // Restore scroll after content renders
-      const pos = sessionStorage.getItem("scroll_/") || sessionStorage.getItem("scroll_before_plans");
-      if (pos) {
-        setTimeout(() => window.scrollTo(0, parseInt(pos, 10)), 50);
-        return;
-      }
-      // Handle hash navigation
-      const hash = sessionStorage.getItem("scroll_to_hash");
+      // Handle hash / pricing target navigation FIRST
+      const hash = sessionStorage.getItem("scroll_to_hash") || (window.location.hash ? window.location.hash : null);
       if (hash) {
         sessionStorage.removeItem("scroll_to_hash");
+        sessionStorage.removeItem("scroll_/");
+        sessionStorage.removeItem("scroll_before_plans");
         setTimeout(() => {
           const el = document.querySelector(hash);
           if (el) {
             const top = el.getBoundingClientRect().top + window.scrollY - 76;
             window.scrollTo({ top, behavior: "smooth" });
           }
-        }, 300);
+          window.dispatchEvent(new CustomEvent("autoClaimOffer"));
+        }, 150);
+        return;
+      }
+
+      // Restore scroll after content renders
+      const pos = sessionStorage.getItem("scroll_/") || sessionStorage.getItem("scroll_before_plans");
+      if (pos) {
+        setTimeout(() => window.scrollTo(0, parseInt(pos, 10)), 50);
         return;
       }
       // Fresh visit — scroll to top
       if (!isReturning) window.scrollTo(0, 0);
     }
-  }, [loading]);
+  }, [loading, isReturning]);
 
   return (
     <>

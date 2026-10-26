@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { getOffers, addOffer, removeOffer, updateOffer, pullOffersFromSheets } from "@/lib/offersStore";
+import { getOffers, addOffer, removeOffer, updateOffer, pullOffersFromSheets, normalizeImageUrl, formatOfferDateTime } from "@/lib/offersStore";
 import { getCoupons, addCoupon, updateCoupon, removeCoupon, ensureCouponExists, pullFromSheets } from "@/lib/couponStore";
 import type { Coupon } from "@/lib/couponStore";
 import type { Offer } from "@/data/offers";
@@ -76,6 +76,8 @@ export default function AdminOffers() {
   const [couponCode, setCouponCode] = useState("");
   const [offerStatus, setOfferStatus] = useState<"active" | "upcoming" | "expired">("active");
   const [image, setImage] = useState("");
+  const [imageError, setImageError] = useState(false);
+  const [editImageError, setEditImageError] = useState(false);
   const [isFeatured, setIsFeatured] = useState(true);
   const [showInPopup, setShowInPopup] = useState(true);
 
@@ -126,12 +128,13 @@ export default function AdminOffers() {
   const handleAdd = () => {
     if (!title.trim() || !description.trim()) { alert("Title and Description are required"); return; }
     const cleanCoupon = couponCode.trim().toUpperCase();
+    const cleanImg = normalizeImageUrl(image);
     addOffer({
       title: title.trim(), subtitle: subtitle.trim(), description: description.trim(),
       discount: discount.trim() || "SPECIAL OFFER", badge: badge.trim() || "Limited Time",
       validTill: validTill.trim() || "Limited Slots", ctaText: ctaText.trim() || "Claim Offer",
       whatsappMessage: whatsappMessage.trim() || `Hi Muscle Empire! I would like to claim the ${title}.`,
-      isFeatured, showInPopup, image, couponCode: cleanCoupon || undefined, status: offerStatus,
+      isFeatured, showInPopup, image: cleanImg, couponCode: cleanCoupon || undefined, status: offerStatus,
     });
     if (cleanCoupon) {
       const discNum = parseInt(discount.replace(/\D/g, ""), 10) || 25;
@@ -145,12 +148,19 @@ export default function AdminOffers() {
 
   const handleUpdate = () => {
     if (!editingOffer) return;
-    if (editingOffer.couponCode) {
+    const cleanCoupon = (editingOffer.couponCode || "").trim().toUpperCase();
+    const cleanImg = normalizeImageUrl(editingOffer.image);
+    const updatedOffer: Offer = {
+      ...editingOffer,
+      image: cleanImg,
+      couponCode: cleanCoupon || undefined,
+    };
+    if (cleanCoupon) {
       const discNum = parseInt((editingOffer.discount || "").replace(/\D/g, ""), 10) || 25;
-      ensureCouponExists(editingOffer.couponCode, discNum, `${editingOffer.title} Offer Coupon`);
+      ensureCouponExists(cleanCoupon, discNum, `${editingOffer.title} Offer Coupon`);
       setCoupons(getCoupons());
     }
-    updateOffer(editingOffer.id, editingOffer);
+    updateOffer(editingOffer.id, updatedOffer);
     setOffers(getOffers());
     setEditingOffer(null);
   };
@@ -274,7 +284,17 @@ export default function AdminOffers() {
                         <p className="text-white/40 text-xs font-semibold uppercase">{offer.subtitle || "Exclusive Deal"}</p>
                       </div>
                       <p className="text-white/60 text-xs leading-relaxed flex-1">{offer.description}</p>
-                      <p className="text-[11px] text-white/45">Valid till: <strong className="text-white/80">{(() => { try { const d = new Date(offer.validTill); return !isNaN(d.getTime()) && d.getFullYear() > 2000 ? d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : offer.validTill; } catch { return offer.validTill; } })()}</strong></p>
+                      <div className="flex flex-col gap-1.5 pt-1">
+                        <p className="text-[11px] text-white/45">Valid till: <strong className="text-white/80">{formatOfferDateTime(offer.validTill)}</strong></p>
+                        {offer.couponCode ? (
+                          <div className="flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg w-fit">
+                            <Ticket size={12} />
+                            Coupon: {offer.couponCode}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-white/30 italic">No coupon code attached</div>
+                        )}
+                      </div>
                       <div className="flex gap-2.5 pt-3 border-t border-white/10">
                         <button onClick={() => setEditingOffer(offer)} className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer border border-white/5">
                           <Edit size={13} /> Edit
@@ -499,16 +519,22 @@ export default function AdminOffers() {
                         <input
                           type="url"
                           value={image}
-                          onChange={e => setImage(e.target.value)}
-                          placeholder="https://i.ibb.co/... paste image URL here"
+                          onChange={e => { setImage(normalizeImageUrl(e.target.value)); setImageError(false); }}
+                          placeholder="https://i.ibb.co/... paste direct image link here"
                           className="bg-transparent text-white text-sm outline-none flex-1 placeholder:text-white/30"
                         />
-                        {image && <button onClick={() => setImage("")} className="text-white/30 hover:text-red-400 transition-colors"><X size={14} /></button>}
+                        {image && <button onClick={() => { setImage(""); setImageError(false); }} className="text-white/30 hover:text-red-400 transition-colors"><X size={14} /></button>}
                       </div>
                       {image && !image.startsWith("data:") && (
-                        <img src={image} alt="preview" className="w-full h-32 object-cover rounded-xl border border-white/10" onError={e => (e.currentTarget.style.display = "none")} />
+                        imageError ? (
+                          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                            ⚠️ Preview failed. Make sure you paste the <strong>Direct Image Link</strong> (starts with <code>https://i.ibb.co/</code> ending in <code>.png</code>/<code>.jpg</code>), not an ImgBB page link.
+                          </div>
+                        ) : (
+                          <img src={image} alt="preview" className="w-full h-32 object-cover rounded-xl border border-white/10" onError={() => setImageError(true)} />
+                        )
                       )}
-                      <p className="text-[10px] text-white/30">Upload to <span className="text-green-400 font-bold">imgbb.com</span> → copy Direct Link → paste here. Syncs across all devices.</p>
+                      <p className="text-[10px] text-white/30">Upload to <span className="text-green-400 font-bold">imgbb.com</span> → copy Direct Link (e.g. <code>https://i.ibb.co/...</code>) → paste here. Syncs across all devices.</p>
                     </div>
                   </div>
 
@@ -540,18 +566,33 @@ export default function AdminOffers() {
                   </div>
 
                   <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                    <label className="text-xs text-amber-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-                      <Ticket size={14} /> Coupon Code for this Offer
+                    <label className="text-xs text-amber-400 uppercase tracking-wider font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5"><Ticket size={14} /> Coupon Code for this Offer</span>
+                      {couponCode && <span className="text-[10px] text-green-400 font-mono">Selected: {couponCode}</span>}
                     </label>
-                    <select value={couponCode} onChange={(e) => setCouponCode(e.target.value)}
-                      className="h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors cursor-pointer">
-                      <option value="">— No coupon —</option>
-                      {coupons.filter(c => c.enabled).map(c => (
-                        <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s+/g, ""))}
+                        placeholder="Type coupon code (e.g. DIWALI50, SAVE25) or pick below"
+                        className="flex-1 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
+                      />
+                      {coupons.filter(c => c.enabled).length > 0 && (
+                        <select
+                          value=""
+                          onChange={(e) => { if (e.target.value) setCouponCode(e.target.value); }}
+                          className="h-10 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
+                        >
+                          <option value="">Pick Existing...</option>
+                          {coupons.filter(c => c.enabled).map(c => (
+                            <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                     <p className="text-[10px] text-amber-300/70">
-                      Select an existing coupon code to attach to this offer.
+                      Type any coupon code or choose an existing one. If you type a new code, it will be automatically created and activated!
                     </p>
                   </div>
 
@@ -636,16 +677,22 @@ export default function AdminOffers() {
                         <input
                           type="url"
                           value={editingOffer.image || ""}
-                          onChange={e => setEditingOffer({ ...editingOffer, image: e.target.value })}
-                          placeholder="https://i.ibb.co/... paste image URL here"
+                          onChange={e => { setEditingOffer({ ...editingOffer, image: normalizeImageUrl(e.target.value) }); setEditImageError(false); }}
+                          placeholder="https://i.ibb.co/... paste direct image link here"
                           className="bg-transparent text-white text-sm outline-none flex-1 placeholder:text-white/30"
                         />
-                        {editingOffer.image && <button onClick={() => setEditingOffer({ ...editingOffer, image: "" })} className="text-white/30 hover:text-red-400 transition-colors"><X size={14} /></button>}
+                        {editingOffer.image && <button onClick={() => { setEditingOffer({ ...editingOffer, image: "" }); setEditImageError(false); }} className="text-white/30 hover:text-red-400 transition-colors"><X size={14} /></button>}
                       </div>
                       {editingOffer.image && !editingOffer.image.startsWith("data:") && (
-                        <img src={editingOffer.image} alt="preview" className="w-full h-32 object-cover rounded-xl border border-white/10" onError={e => (e.currentTarget.style.display = "none")} />
+                        editImageError ? (
+                          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                            ⚠️ Preview failed. Make sure you paste the <strong>Direct Image Link</strong> (starts with <code>https://i.ibb.co/</code> ending in <code>.png</code>/<code>.jpg</code>), not an ImgBB page link.
+                          </div>
+                        ) : (
+                          <img src={editingOffer.image} alt="preview" className="w-full h-32 object-cover rounded-xl border border-white/10" onError={() => setEditImageError(true)} />
+                        )
                       )}
-                      <p className="text-[10px] text-white/30">Upload to <span className="text-green-400 font-bold">imgbb.com</span> → copy Direct Link → paste here. Syncs across all devices.</p>
+                      <p className="text-[10px] text-white/30">Upload to <span className="text-green-400 font-bold">imgbb.com</span> → copy Direct Link (e.g. <code>https://i.ibb.co/...</code>) → paste here. Syncs across all devices.</p>
                     </div>
                   </div>
 
@@ -677,18 +724,33 @@ export default function AdminOffers() {
                   </div>
 
                   <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                    <label className="text-xs text-amber-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-                      <Ticket size={14} /> Coupon Code for this Offer
+                    <label className="text-xs text-amber-400 uppercase tracking-wider font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5"><Ticket size={14} /> Coupon Code for this Offer</span>
+                      {editingOffer.couponCode && <span className="text-[10px] text-green-400 font-mono">Selected: {editingOffer.couponCode}</span>}
                     </label>
-                    <select value={editingOffer.couponCode || ""} onChange={(e) => setEditingOffer({ ...editingOffer, couponCode: e.target.value })}
-                      className="h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors cursor-pointer">
-                      <option value="">— No coupon —</option>
-                      {coupons.filter(c => c.enabled).map(c => (
-                        <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editingOffer.couponCode || ""}
+                        onChange={(e) => setEditingOffer({ ...editingOffer, couponCode: e.target.value.toUpperCase().replace(/\s+/g, "") })}
+                        placeholder="Type coupon code (e.g. DIWALI50, SAVE25) or pick below"
+                        className="flex-1 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
+                      />
+                      {coupons.filter(c => c.enabled).length > 0 && (
+                        <select
+                          value=""
+                          onChange={(e) => { if (e.target.value) setEditingOffer({ ...editingOffer, couponCode: e.target.value }); }}
+                          className="h-10 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
+                        >
+                          <option value="">Pick Existing...</option>
+                          {coupons.filter(c => c.enabled).map(c => (
+                            <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                     <p className="text-[10px] text-amber-300/70">
-                      Select an existing coupon code to attach to this offer.
+                      Type any coupon code or choose an existing one. If you type a new code, it will be automatically created and activated!
                     </p>
                   </div>
 

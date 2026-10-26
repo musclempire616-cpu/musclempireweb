@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Clock, ArrowRight, MessageSquare, Flame, Info, CheckCircle2 } from "lucide-react";
 import { useLocation } from "wouter";
-import { getOffers } from "@/lib/offersStore";
+import { getOffers, formatOfferDateTime } from "@/lib/offersStore";
 import type { Offer } from "@/data/offers";
 import CouponClaimModal from "@/components/CouponClaimModal";
 
@@ -193,7 +193,7 @@ export default function OfferPopup() {
                       <Clock size={13} />
                       <span>
                         Valid until:{" "}
-                        <strong className="text-gray-700">{currentOffer.validTill}</strong>
+                        <strong className="text-gray-700">{formatOfferDateTime(currentOffer.validTill)}</strong>
                       </span>
                     </div>
                   </motion.div>

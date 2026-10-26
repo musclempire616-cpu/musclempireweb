@@ -106,11 +106,12 @@ export function PricingTable({
     }
   }, [selectedPlan, appliedCoupon])
 
-  // Check for auto_apply_coupon in sessionStorage on mount
+  // Check for auto_apply_coupon in sessionStorage/localStorage on mount
   React.useEffect(() => {
-    const code = sessionStorage.getItem("auto_apply_coupon")
+    const code = sessionStorage.getItem("auto_apply_coupon") || localStorage.getItem("auto_apply_coupon")
     if (code) {
       sessionStorage.removeItem("auto_apply_coupon")
+      localStorage.removeItem("auto_apply_coupon")
       const cleanCode = code.trim().toUpperCase()
       setShowCoupon(true)
       setCouponInput(cleanCode)

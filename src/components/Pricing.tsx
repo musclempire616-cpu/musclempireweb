@@ -340,7 +340,7 @@ export default function Pricing() {
   // Auto-open pricing modal if user claimed a coupon offer
   useEffect(() => {
     const handleAutoClaim = () => {
-      const code = sessionStorage.getItem("auto_apply_coupon");
+      const code = sessionStorage.getItem("auto_apply_coupon") || localStorage.getItem("auto_apply_coupon");
       if (code) {
         setModalGym({ gym: gyms[0], planType: "gym" });
       }

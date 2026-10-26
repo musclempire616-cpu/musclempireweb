@@ -82,6 +82,14 @@ function AdminShortcut() {
 function ScrollRestoration() {
   const [location] = useLocation();
   useEffect(() => {
+    if (
+      location === "/" &&
+      (sessionStorage.getItem("scroll_to_hash") ||
+        sessionStorage.getItem("auto_apply_coupon") ||
+        (typeof window !== "undefined" && window.location.hash === "#pricing"))
+    ) {
+      return;
+    }
     const saved = sessionStorage.getItem(`scroll_${location}`);
     if (saved) {
       window.scrollTo(0, parseInt(saved, 10));
