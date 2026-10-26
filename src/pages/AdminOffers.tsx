@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { getOffers, addOffer, removeOffer, updateOffer, pullOffersFromSheets, normalizeImageUrl, formatOfferDateTime } from "@/lib/offersStore";
-import { getCoupons, addCoupon, updateCoupon, removeCoupon, ensureCouponExists, pullFromSheets } from "@/lib/couponStore";
+import { getCoupons, addCoupon, updateCoupon, removeCoupon, ensureCouponExists, pullFromSheets, parseDiscountPercent } from "@/lib/couponStore";
 import type { Coupon } from "@/lib/couponStore";
 import type { Offer } from "@/data/offers";
 import { Plus, Trash2, Edit, LogOut, Users, Tag, Link, X, Check, Ticket, ToggleLeft, ToggleRight } from "lucide-react";
@@ -38,7 +38,7 @@ export default function AdminOffers() {
   function handleAddCoupon() {
     if (!cpCode.trim() || !cpDiscount.trim()) { alert("Code and discount are required"); return; }
     setSavingCoupon(true);
-    addCoupon({ code: cpCode.trim().toUpperCase(), discount: Number(cpDiscount), plans: cpPlans, description: cpDesc.trim(), enabled: cpEnabled });
+    addCoupon({ code: cpCode.trim().toUpperCase(), discount: parseDiscountPercent(cpDiscount, cpCode), plans: cpPlans, description: cpDesc.trim(), enabled: cpEnabled });
     setCoupons(getCoupons());
     resetCouponForm();
     setShowAddCoupon(false);
@@ -47,7 +47,7 @@ export default function AdminOffers() {
 
   function handleUpdateCoupon() {
     if (!editingCoupon) return;
-    updateCoupon(editingCoupon.id, editingCoupon);
+    updateCoupon(editingCoupon.id, { ...editingCoupon, discount: parseDiscountPercent(editingCoupon.discount, editingCoupon.code) });
     setCoupons(getCoupons());
     setEditingCoupon(null);
   }
@@ -137,7 +137,7 @@ export default function AdminOffers() {
       isFeatured, showInPopup, image: cleanImg, couponCode: cleanCoupon || undefined, status: offerStatus,
     });
     if (cleanCoupon) {
-      const discNum = parseInt(discount.replace(/\D/g, ""), 10) || 25;
+      const discNum = parseDiscountPercent(discount, cleanCoupon);
       ensureCouponExists(cleanCoupon, discNum, `${title} Offer Coupon`);
       setCoupons(getCoupons());
     }
@@ -156,7 +156,7 @@ export default function AdminOffers() {
       couponCode: cleanCoupon || undefined,
     };
     if (cleanCoupon) {
-      const discNum = parseInt((editingOffer.discount || "").replace(/\D/g, ""), 10) || 25;
+      const discNum = parseDiscountPercent(editingOffer.discount, cleanCoupon);
       ensureCouponExists(cleanCoupon, discNum, `${editingOffer.title} Offer Coupon`);
       setCoupons(getCoupons());
     }

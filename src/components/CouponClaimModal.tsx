@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Copy, Check, ArrowRight, MessageSquare, Tag, CheckCircle2 } from "lucide-react";
 import { useLocation } from "wouter";
-import { ensureCouponExists } from "@/lib/couponStore";
+import { ensureCouponExists, parseDiscountPercent } from "@/lib/couponStore";
 
 export interface OfferClaimData {
   title: string;
@@ -33,7 +33,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
 
   useEffect(() => {
     if (isOpen && offer && couponCode) {
-      const discNum = parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 25;
+      const discNum = parseDiscountPercent(offer.discount, couponCode);
       ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
     }
   }, [isOpen, offer, couponCode]);
@@ -42,7 +42,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
 
   const handleCopyCode = () => {
     if (!couponCode) return;
-    const discNum = parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 25;
+    const discNum = parseDiscountPercent(offer.discount, couponCode);
     ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
 
     // Cross-browser copy
@@ -67,7 +67,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
   };
 
   const handleGoToPricing = () => {
-    const discNum = parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 25;
+    const discNum = parseDiscountPercent(offer.discount, couponCode);
     ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
 
     // Store in both session & local storage so it survives cross-page routing
