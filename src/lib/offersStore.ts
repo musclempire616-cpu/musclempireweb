@@ -2,13 +2,49 @@ import type { Offer } from "@/data/offers";
 import { APPS_SCRIPT_URL } from "@/lib/sheets";
 
 const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
-const CACHE_KEY = "me_offers_v6";
-const CACHE_TS_KEY = "me_offers_ts";
-const LAST_EDIT_KEY = "me_offers_last_edit_ts";
-const COUPON_MAP_KEY = "me_offer_coupons_map_v2";
-const CACHE_TTL = 30_000;
 
-// ── Image URL Normalizer ─────────────────────────────────────────────────────
+// Purge any legacy localStorage cache keys so stale data NEVER persists locally
+if (typeof localStorage !== "undefined") {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("me_offers") || k.startsWith("me_deleted_offers"))) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch {}
+}
+
+// ── In-Memory Cache (Live Session Only — Never persisted to localStorage) ─────
+let inMemoryOffers: Offer[] = [];
+let isFetchingOffers = false;
+
+// ── Deduplication Helper ──────────────────────────────────────────────────────
+export function dedupeOffers(offers: Offer[]): Offer[] {
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+  const result: Offer[] = [];
+
+  for (const o of offers) {
+    if (!o) continue;
+    const cleanId = String(o.id || "").trim();
+    const cleanTitle = String(o.title || "").trim().toLowerCase();
+
+    if (cleanId && seenIds.has(cleanId)) continue;
+    if (cleanTitle && seenTitles.has(cleanTitle)) continue;
+
+    if (cleanId) seenIds.add(cleanId);
+    if (cleanTitle) seenTitles.add(cleanTitle);
+
+    result.push({
+      ...o,
+      image: normalizeImageUrl(o.image),
+    });
+  }
+
+  return result;
+}
+
 // ── Date/Time Formatter (normal readable 24:00 format) ────────────────────────
 export function formatOfferDateTime(val?: string): string {
   if (!val) return "";
@@ -46,6 +82,7 @@ export function formatOfferDateTime(val?: string): string {
   return trimmed;
 }
 
+// ── Image URL Normalizer ─────────────────────────────────────────────────────
 export function normalizeImageUrl(url?: string): string {
   if (!url) return "";
   let u = url.trim();
@@ -67,41 +104,6 @@ export function normalizeImageUrl(url?: string): string {
   }
 
   return u;
-}
-
-// ── Persistent Offer-Coupon Map (preserves couponCode locally & across Sheets sync)
-function readCouponMap(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(COUPON_MAP_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeCouponMap(map: Record<string, string>): void {
-  try {
-    localStorage.setItem(COUPON_MAP_KEY, JSON.stringify(map));
-  } catch {}
-}
-
-function recordCouponForOffer(id: string, title: string, couponCode?: string): void {
-  if (!id && !title) return;
-  const map = readCouponMap();
-  const cleanCode = (couponCode || "").trim().toUpperCase();
-  if (cleanCode) {
-    if (id) map[id] = cleanCode;
-    if (title) map[title.toLowerCase().trim()] = cleanCode;
-  } else {
-    if (id) delete map[id];
-    if (title) delete map[title.toLowerCase().trim()];
-  }
-  writeCouponMap(map);
-}
-
-function getCouponForOffer(id: string, title: string): string | undefined {
-  const map = readCouponMap();
-  return (id && map[id]) || (title && map[title.toLowerCase().trim()]) || undefined;
 }
 
 // ── Metadata Tag Encoder/Decoder ─────────────────────────────────────────────
@@ -133,14 +135,6 @@ function decodeOfferFromSheets(offer: Offer): Offer {
     desc = desc.replace(new RegExp(COUPON_TAG_REGEX, "gi"), "").trim();
   }
 
-  // Fallback to local persistent map if tag wasn't present
-  if (!couponCode) {
-    couponCode = getCouponForOffer(offer.id, offer.title);
-  } else {
-    // Record to map for redundancy
-    recordCouponForOffer(offer.id, offer.title, couponCode);
-  }
-
   return {
     ...offer,
     description: desc,
@@ -149,86 +143,41 @@ function decodeOfferFromSheets(offer: Offer): Offer {
   };
 }
 
-// ── localStorage (instant) ───────────────────────────────────────────────────
+// ── Pure Sheets API (Direct Fetch & Save — Zero Local Storage) ───────────────
 
-function readCache(): Offer[] {
+export async function pullOffersFromSheets(retry = 2): Promise<Offer[]> {
+  if (isFetchingOffers) return inMemoryOffers;
+  isFetchingOffers = true;
+
   try {
-    try {
-      localStorage.removeItem("me_offers_v5");
-      localStorage.removeItem("me_offers_v4");
-      localStorage.removeItem("me_offers_v3");
-      localStorage.removeItem("me_offers_v2");
-      localStorage.removeItem("me_offers_v1");
-    } catch {}
-    const item = localStorage.getItem(CACHE_KEY);
-    if (item === null) return [];
-    const list: Offer[] = JSON.parse(item);
-    return Array.isArray(list) ? list.map(decodeOfferFromSheets) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeCache(offers: Offer[]): void {
-  const processed = offers.map(o => {
-    if (o.couponCode) {
-      recordCouponForOffer(o.id, o.title, o.couponCode);
-    }
-    return {
-      ...o,
-      image: normalizeImageUrl(o.image),
-    };
-  });
-  localStorage.setItem(CACHE_KEY, JSON.stringify(processed));
-  localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
-}
-
-function recordLocalEdit(): void {
-  localStorage.setItem(LAST_EDIT_KEY, String(Date.now()));
-}
-
-function isRecentLocalEdit(): boolean {
-  const ts = parseInt(localStorage.getItem(LAST_EDIT_KEY) || "0", 10);
-  return Date.now() - ts < 15_000;
-}
-
-function isCacheStale(): boolean {
-  const ts = parseInt(localStorage.getItem(CACHE_TS_KEY) || "0", 10);
-  return Date.now() - ts > CACHE_TTL;
-}
-
-// ── Sheets (background) ───────────────────────────────────────────────────────
-
-export async function pullOffersFromSheets(retry = 1): Promise<Offer[]> {
-  if (isRecentLocalEdit()) {
-    return readCache();
-  }
-
-  for (let attempt = 0; attempt <= retry; attempt++) {
-    try {
-      const res = await fetch(`${APPS_SCRIPT_URL}?action=getOffers&token=${T}&_t=${Date.now()}`, {
-        redirect: "follow",
-        cache: "no-store",
-      });
-      const text = await res.text();
-      const json = JSON.parse(text);
-      if (Array.isArray(json?.offers)) {
-        if (!isRecentLocalEdit()) {
-          const offers: Offer[] = json.offers.map(decodeOfferFromSheets);
-          writeCache(offers);
+    for (let attempt = 0; attempt <= retry; attempt++) {
+      try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=getOffers&token=${T}&_t=${Date.now()}`, {
+          redirect: "follow",
+          cache: "no-store",
+        });
+        const text = await res.text();
+        const json = JSON.parse(text);
+        if (Array.isArray(json?.offers)) {
+          const decoded = json.offers.map(decodeOfferFromSheets);
+          const deduped = dedupeOffers(decoded);
+          inMemoryOffers = deduped;
           window.dispatchEvent(new CustomEvent("offersUpdated"));
-          return offers;
+          return inMemoryOffers;
         }
+      } catch (e) {
+        if (attempt < retry) await new Promise(r => setTimeout(r, 600));
       }
-    } catch {
-      if (attempt < retry) await new Promise(r => setTimeout(r, 600));
     }
+  } finally {
+    isFetchingOffers = false;
   }
-  return readCache();
+  return inMemoryOffers;
 }
 
 async function pushToSheets(offers: Offer[]): Promise<boolean> {
-  const prepared = offers.map(encodeOfferForSheets);
+  const deduped = dedupeOffers(offers);
+  const prepared = deduped.map(encodeOfferForSheets);
   const dataStr = JSON.stringify(prepared);
   const qs = new URLSearchParams({
     action: "saveOffers",
@@ -252,58 +201,68 @@ async function pushToSheets(offers: Offer[]): Promise<boolean> {
   }
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+// ── Public Store API ─────────────────────────────────────────────────────────
 
 export function getOffers(): Offer[] {
-  const cached = readCache();
-  if (isCacheStale() || localStorage.getItem(CACHE_KEY) === null) {
+  // If memory is empty, kick off a live fetch from Sheets immediately
+  if (inMemoryOffers.length === 0 && !isFetchingOffers) {
     pullOffersFromSheets().catch(() => {});
   }
-  return cached;
+  return inMemoryOffers;
 }
 
 export function getOffersAndSync(): Offer[] {
-  const cached = readCache();
-  pullOffersFromSheets();
-  return cached;
+  pullOffersFromSheets().catch(() => {});
+  return inMemoryOffers;
 }
 
-function _save(offers: Offer[]): void {
-  recordLocalEdit();
-  writeCache(offers);
-  pushToSheets(offers);
+export async function addOffer(offer: Omit<Offer, "id">): Promise<Offer[]> {
+  // 1. Fetch latest directly from Google Sheets to avoid adding over stale data
+  const latest = await pullOffersFromSheets();
+
+  // 2. Prevent duplicate offer titles
+  const cleanTitle = offer.title.trim().toLowerCase();
+  if (latest.some(o => o.title.trim().toLowerCase() === cleanTitle)) {
+    return latest;
+  }
+
+  const newOffer: Offer = {
+    id: "offer_" + Date.now(),
+    ...offer,
+    title: offer.title.trim(),
+    image: normalizeImageUrl(offer.image),
+  };
+
+  const next = dedupeOffers([...latest, newOffer]);
+  inMemoryOffers = next;
   window.dispatchEvent(new CustomEvent("offersUpdated"));
+
+  // 3. Persist directly to Google Sheets and await confirmation
+  await pushToSheets(next);
+  return inMemoryOffers;
 }
 
-export function saveOffers(offers: Offer[]): void { _save(offers); }
+export async function removeOffer(id: string): Promise<Offer[]> {
+  // 1. Remove from in-memory immediately
+  inMemoryOffers = inMemoryOffers.filter(o => o.id !== id);
+  window.dispatchEvent(new CustomEvent("offersUpdated"));
 
-export function addOffer(offer: Omit<Offer, "id">): void {
-  const offers = readCache();
-  const id = "offer_" + Date.now();
-  if (offer.couponCode) {
-    recordCouponForOffer(id, offer.title, offer.couponCode);
-  }
-  offers.push({ id, ...offer, image: normalizeImageUrl(offer.image) });
-  _save(offers);
+  // 2. Persist deletion directly to Google Sheets and await confirmation
+  await pushToSheets(inMemoryOffers);
+
+  // 3. Confirm with fresh live pull from Sheets so it can never resurrect
+  return await pullOffersFromSheets();
 }
 
-export function removeOffer(id: string): void {
-  const current = readCache();
-  const next = current.filter(o => o.id !== id);
-  _save(next);
-}
-
-export function updateOffer(id: string, updated: Partial<Offer>): void {
-  const current = readCache();
-  if (updated.couponCode !== undefined || updated.title !== undefined) {
-    const existing = current.find(o => o.id === id);
-    const title = updated.title || existing?.title || "";
-    recordCouponForOffer(id, title, updated.couponCode ?? existing?.couponCode);
-  }
-  const next = current.map(o => o.id === id ? {
+export async function updateOffer(id: string, updated: Partial<Offer>): Promise<Offer[]> {
+  inMemoryOffers = inMemoryOffers.map(o => o.id === id ? {
     ...o,
     ...updated,
     image: updated.image !== undefined ? normalizeImageUrl(updated.image) : o.image
   } : o);
-  _save(next);
+  inMemoryOffers = dedupeOffers(inMemoryOffers);
+  window.dispatchEvent(new CustomEvent("offersUpdated"));
+
+  await pushToSheets(inMemoryOffers);
+  return inMemoryOffers;
 }

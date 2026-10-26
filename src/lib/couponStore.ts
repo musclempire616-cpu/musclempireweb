@@ -2,11 +2,18 @@ import { APPS_SCRIPT_URL } from "@/lib/sheets";
 import { getOffers } from "@/lib/offersStore";
 
 const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
-const CACHE_KEY = "me_coupons_v5";
-const CACHE_TS_KEY = "me_coupons_ts";
-const LAST_EDIT_KEY = "me_coupons_last_edit_ts";
-const DELETED_COUPONS_KEY = "me_deleted_coupon_codes_v1";
-const CACHE_TTL = 30_000; // 30 seconds
+
+// Purge any legacy localStorage cache keys so stale data NEVER persists locally
+if (typeof localStorage !== "undefined") {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("me_coupon") || k.startsWith("me_deleted_coupon"))) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch {}
+}
 
 export interface Coupon {
   id: string;
@@ -17,14 +24,15 @@ export interface Coupon {
   description?: string;
 }
 
+// ── In-Memory Cache (Live Session Only — Never persisted to localStorage) ─────
+let inMemoryCoupons: Coupon[] = [];
+let isPullingCoupons = false;
+
 // ── Smart Discount Parser & Sanitizer ────────────────────────────────────────
-// Permanently prevents "1%" bug. Normalizes decimals (0.25 -> 25) and heals bugged discounts.
 export function parseDiscountPercent(val?: any, code?: string): number {
   if (typeof val === "number" && !isNaN(val)) {
-    // If decimal percentage from Sheets (e.g. 0.25 -> 25)
     if (val > 0 && val < 1) return Math.round(val * 100);
     if (val > 1 && val <= 100) return Math.round(val);
-    // If 1 (the bug value), extract from code like SAVE25 or default to 25
     if (val === 1) {
       if (code) {
         const m = code.match(/(\d{2})$/);
@@ -36,21 +44,18 @@ export function parseDiscountPercent(val?: any, code?: string): number {
 
   const str = String(val || "").trim();
 
-  // Match e.g. "25%", "25 %", "25 percent"
   const pct = str.match(/(\d{1,2})\s*(?:%|percent)/i);
   if (pct) {
     const n = parseInt(pct[1], 10);
     if (n >= 1 && n <= 100) return n;
   }
 
-  // Match 2-digit number e.g. "25", "50", "30"
   const digits = str.match(/\b([1-9]\d)\b/);
   if (digits) {
     const n = parseInt(digits[1], 10);
     if (n >= 5 && n <= 100) return n;
   }
 
-  // Match coupon code number e.g. "SAVE25" -> 25
   if (code) {
     const m = code.match(/(\d{2})$/);
     if (m) return parseInt(m[1], 10);
@@ -59,105 +64,37 @@ export function parseDiscountPercent(val?: any, code?: string): number {
   const raw = parseInt(str.replace(/\D/g, ""), 10);
   if (!isNaN(raw) && raw >= 5 && raw <= 100) return raw;
 
-  return 25; // default sensible discount
+  return 25;
 }
 
-let isPulling = false;
+// ── Deduplication Helper ──────────────────────────────────────────────────────
+export function dedupeCoupons(coupons: Coupon[]): Coupon[] {
+  const seenCodes = new Set<string>();
+  const result: Coupon[] = [];
 
-function getDeletedCouponCodes(): Set<string> {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DELETED_COUPONS_KEY) || "[]");
-    return new Set(Array.isArray(raw) ? raw.map((s: string) => String(s).toUpperCase().trim()) : []);
-  } catch { return new Set(); }
-}
-
-function addDeletedCouponCode(code: string): void {
-  const set = getDeletedCouponCodes();
-  const clean = code.toUpperCase().trim();
-  if (!clean) return;
-  set.add(clean);
-  localStorage.setItem(DELETED_COUPONS_KEY, JSON.stringify(Array.from(set)));
-}
-
-// ── Automatic migration / cleanup of legacy unwanted coupons ─────────────────
-if (typeof localStorage !== "undefined") {
-  addDeletedCouponCode("MUSCLEMPIRE25");
-  try {
-    const raw = JSON.parse(localStorage.getItem(CACHE_KEY) || "[]");
-    if (Array.isArray(raw)) {
-      const cleaned = raw.filter((c: Coupon) => (c.code || "").toUpperCase().trim() !== "MUSCLEMPIRE25");
-      if (cleaned.length !== raw.length) {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cleaned));
-      }
-    }
-  } catch {}
-}
-
-// ── localStorage (instant read/write) ───────────────────────────────────────
-
-function readCache(): Coupon[] {
-  try {
-    try {
-      localStorage.removeItem("me_coupons_v4");
-      localStorage.removeItem("me_coupons_v3");
-      localStorage.removeItem("me_coupons_v2");
-      localStorage.removeItem("me_coupons_v1");
-      localStorage.removeItem("me_coupons");
-    } catch {}
-    const item = localStorage.getItem(CACHE_KEY);
-    if (item === null) return [];
-    const deletedCodes = getDeletedCouponCodes();
-    const raw: Coupon[] = JSON.parse(item);
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .filter(c => !deletedCodes.has((c.code || "").toUpperCase().trim()))
-      .map(c => ({
-        ...c,
-        code: (c.code || "").toUpperCase().trim(),
-        discount: parseDiscountPercent(c.discount, c.code),
-        plans: Array.isArray(c.plans) ? c.plans : [],
-        enabled: c.enabled !== false,
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function writeCache(coupons: Coupon[]): void {
-  const deletedCodes = getDeletedCouponCodes();
-  const valid = coupons
-    .filter(c => !deletedCodes.has((c.code || "").toUpperCase().trim()))
-    .map(c => ({
+  for (const c of coupons) {
+    if (!c) continue;
+    const code = (c.code || "").toUpperCase().trim();
+    if (!code || seenCodes.has(code)) continue;
+    seenCodes.add(code);
+    result.push({
       ...c,
-      code: (c.code || "").toUpperCase().trim(),
-      discount: parseDiscountPercent(c.discount, c.code),
-    }));
-  localStorage.setItem(CACHE_KEY, JSON.stringify(valid));
-  localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
-}
-
-function recordLocalEdit(): void {
-  localStorage.setItem(LAST_EDIT_KEY, String(Date.now()));
-}
-
-function isRecentLocalEdit(): boolean {
-  const ts = parseInt(localStorage.getItem(LAST_EDIT_KEY) || "0", 10);
-  return Date.now() - ts < 15_000;
-}
-
-function isCacheStale(): boolean {
-  const ts = parseInt(localStorage.getItem(CACHE_TS_KEY) || "0", 10);
-  return Date.now() - ts > CACHE_TTL;
-}
-
-// ── Sheets (background sync only) ───────────────────────────────────────────
-
-export async function pullFromSheets(retry = 1): Promise<Coupon[]> {
-  if (isRecentLocalEdit() || isPulling) {
-    return readCache();
+      code,
+      discount: parseDiscountPercent(c.discount, code),
+      plans: Array.isArray(c.plans) ? c.plans : [],
+      enabled: c.enabled !== false,
+      description: String(c.description || ""),
+    });
   }
-  isPulling = true;
-  const deletedCodes = getDeletedCouponCodes();
+
+  return result;
+}
+
+// ── Sheets API (Direct Fetch & Push — Zero Local Storage) ────────────────────
+
+export async function pullFromSheets(retry = 2): Promise<Coupon[]> {
+  if (isPullingCoupons) return inMemoryCoupons;
+  isPullingCoupons = true;
 
   try {
     for (let attempt = 0; attempt <= retry; attempt++) {
@@ -169,42 +106,24 @@ export async function pullFromSheets(retry = 1): Promise<Coupon[]> {
         const text = await res.text();
         const json = JSON.parse(text);
         if (Array.isArray(json?.coupons)) {
-          if (!isRecentLocalEdit()) {
-            const validCoupons = (json.coupons as Coupon[])
-              .filter(c => c && c.code && !deletedCodes.has((c.code || "").toUpperCase().trim()))
-              .map(c => ({
-                ...c,
-                code: String(c.code).toUpperCase().trim(),
-                discount: parseDiscountPercent(c.discount, c.code),
-                plans: Array.isArray(c.plans) ? c.plans : [],
-                enabled: c.enabled === true || String(c.enabled).toLowerCase() === "true",
-                description: String(c.description || ""),
-              }));
-            writeCache(validCoupons);
-            window.dispatchEvent(new CustomEvent("couponsUpdated"));
-            return validCoupons;
-          }
+          const deduped = dedupeCoupons(json.coupons);
+          inMemoryCoupons = deduped;
+          window.dispatchEvent(new CustomEvent("couponsUpdated"));
+          return inMemoryCoupons;
         }
       } catch (e) {
-        if (attempt < retry) await new Promise(r => setTimeout(r, 800));
+        if (attempt < retry) await new Promise(r => setTimeout(r, 600));
       }
     }
   } finally {
-    isPulling = false;
+    isPullingCoupons = false;
   }
-  return readCache();
+  return inMemoryCoupons;
 }
 
 async function pushToSheets(coupons: Coupon[]): Promise<boolean> {
-  const deletedCodes = getDeletedCouponCodes();
-  const valid = coupons
-    .filter(c => !deletedCodes.has((c.code || "").toUpperCase().trim()))
-    .map(c => ({
-      ...c,
-      code: (c.code || "").toUpperCase().trim(),
-      discount: parseDiscountPercent(c.discount, c.code),
-    }));
-  const dataStr = JSON.stringify(valid);
+  const deduped = dedupeCoupons(coupons);
+  const dataStr = JSON.stringify(deduped);
   const qs = new URLSearchParams({
     action: "saveCoupons",
     token: T,
@@ -214,11 +133,7 @@ async function pushToSheets(coupons: Coupon[]): Promise<boolean> {
   const url = `${APPS_SCRIPT_URL}?${qs}`;
 
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      cache: "no-store"
-    });
+    const res = await fetch(url, { method: "GET", redirect: "follow", cache: "no-store" });
     await res.text();
     return true;
   } catch {
@@ -231,44 +146,53 @@ async function pushToSheets(coupons: Coupon[]): Promise<boolean> {
   }
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+// ── Public Store API ─────────────────────────────────────────────────────────
 
 export function getCoupons(): Coupon[] {
-  if (isCacheStale()) {
+  if (inMemoryCoupons.length === 0 && !isPullingCoupons) {
     pullFromSheets().catch(() => {});
   }
-  return readCache();
+  return inMemoryCoupons;
 }
 
-function _save(coupons: Coupon[]): void {
-  recordLocalEdit();
-  writeCache(coupons);
-  pushToSheets(coupons);
-  window.dispatchEvent(new CustomEvent("couponsUpdated"));
-}
-
-export function addCoupon(coupon: Omit<Coupon, "id">): void {
+export async function addCoupon(coupon: Omit<Coupon, "id">): Promise<Coupon[]> {
   const cleanCode = coupon.code.toUpperCase().trim();
-  const deletedCodes = getDeletedCouponCodes();
-  if (deletedCodes.has(cleanCode)) {
-    deletedCodes.delete(cleanCode);
-    localStorage.setItem(DELETED_COUPONS_KEY, JSON.stringify(Array.from(deletedCodes)));
+  if (!cleanCode) return inMemoryCoupons;
+
+  // 1. Fetch latest from Sheets
+  const current = await pullFromSheets();
+
+  // 2. If coupon with this code already exists, update it rather than duplicating
+  const existingIdx = current.findIndex(c => c.code.toUpperCase().trim() === cleanCode);
+  let next: Coupon[];
+
+  if (existingIdx !== -1) {
+    next = current.map((c, idx) => idx === existingIdx ? {
+      ...c,
+      ...coupon,
+      code: cleanCode,
+      discount: parseDiscountPercent(coupon.discount, cleanCode),
+    } : c);
+  } else {
+    next = [...current, {
+      id: "coupon_" + Date.now(),
+      ...coupon,
+      code: cleanCode,
+      discount: parseDiscountPercent(coupon.discount, cleanCode),
+    }];
   }
 
-  const coupons = readCache();
-  if (coupons.find(c => c.code === cleanCode)) return;
-  coupons.push({
-    id: "coupon_" + Date.now(),
-    ...coupon,
-    code: cleanCode,
-    discount: parseDiscountPercent(coupon.discount, cleanCode),
-  });
-  _save(coupons);
+  const deduped = dedupeCoupons(next);
+  inMemoryCoupons = deduped;
+  window.dispatchEvent(new CustomEvent("couponsUpdated"));
+
+  // 3. Persist directly to Google Sheets and await confirmation
+  await pushToSheets(deduped);
+  return inMemoryCoupons;
 }
 
-export function updateCoupon(id: string, updated: Partial<Coupon>): void {
-  const current = readCache();
-  const next = current.map(c => {
+export async function updateCoupon(id: string, updated: Partial<Coupon>): Promise<Coupon[]> {
+  inMemoryCoupons = inMemoryCoupons.map(c => {
     if (c.id !== id) return c;
     const nextObj = { ...c, ...updated };
     if (updated.discount !== undefined) {
@@ -276,42 +200,42 @@ export function updateCoupon(id: string, updated: Partial<Coupon>): void {
     }
     return nextObj;
   });
-  _save(next);
+  inMemoryCoupons = dedupeCoupons(inMemoryCoupons);
+  window.dispatchEvent(new CustomEvent("couponsUpdated"));
+
+  await pushToSheets(inMemoryCoupons);
+  return inMemoryCoupons;
 }
 
-export function removeCoupon(id: string): void {
-  const current = readCache();
-  const target = current.find(c => c.id === id);
-  if (target) {
-    addDeletedCouponCode(target.code);
-  }
-  const next = current.filter(c => c.id !== id);
-  _save(next);
+export async function removeCoupon(id: string): Promise<Coupon[]> {
+  inMemoryCoupons = inMemoryCoupons.filter(c => c.id !== id);
+  window.dispatchEvent(new CustomEvent("couponsUpdated"));
+
+  await pushToSheets(inMemoryCoupons);
+  return await pullFromSheets();
 }
 
-export function saveCoupons(coupons: Coupon[]): void {
-  _save(coupons);
+export async function saveCoupons(coupons: Coupon[]): Promise<boolean> {
+  inMemoryCoupons = dedupeCoupons(coupons);
+  window.dispatchEvent(new CustomEvent("couponsUpdated"));
+  return await pushToSheets(inMemoryCoupons);
 }
 
-export function ensureCouponExists(code: string, discount = 25, description?: string): void {
+export async function ensureCouponExists(code: string, discount = 25, description?: string): Promise<void> {
   const cleanCode = code.toUpperCase().trim();
   if (!cleanCode) return;
-  const deletedCodes = getDeletedCouponCodes();
-  if (deletedCodes.has(cleanCode)) return;
 
-  const existing = readCache().find(c => c.code === cleanCode);
+  const existing = inMemoryCoupons.find(c => c.code === cleanCode);
   if (existing) {
-    // CRITICAL FIX: NEVER overwrite an existing coupon configured by admin!
-    // Only heal if the existing coupon had the bugged 1% discount
     if (existing.discount <= 1) {
       const healed = parseDiscountPercent(discount, cleanCode);
-      updateCoupon(existing.id, { discount: healed });
+      await updateCoupon(existing.id, { discount: healed });
     }
     return;
   }
 
   const finalDisc = parseDiscountPercent(discount, cleanCode);
-  addCoupon({
+  await addCoupon({
     code: cleanCode,
     discount: finalDisc,
     plans: [],
@@ -323,8 +247,6 @@ export function ensureCouponExists(code: string, discount = 25, description?: st
 export function validateCoupon(code: string, planName: string): { discount: number; coupon: Coupon } | null {
   const cleanCode = code.toUpperCase().trim();
   if (!cleanCode) return null;
-  const deletedCodes = getDeletedCouponCodes();
-  if (deletedCodes.has(cleanCode)) return null;
 
   let coupons = getCoupons();
   let coupon = coupons.find(c => c.code === cleanCode && c.enabled);
@@ -347,5 +269,5 @@ export function validateCoupon(code: string, planName: string): { discount: numb
   return { discount: parseDiscountPercent(coupon.discount, coupon.code), coupon };
 }
 
-// Legacy async compat shims
+// Legacy async compat shim
 export async function syncCouponsFromSheets(): Promise<void> { await pullFromSheets(); }

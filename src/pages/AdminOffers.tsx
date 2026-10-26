@@ -4,7 +4,7 @@ import { getOffers, addOffer, removeOffer, updateOffer, pullOffersFromSheets, no
 import { getCoupons, addCoupon, updateCoupon, removeCoupon, ensureCouponExists, pullFromSheets, parseDiscountPercent } from "@/lib/couponStore";
 import type { Coupon } from "@/lib/couponStore";
 import type { Offer } from "@/data/offers";
-import { Plus, Trash2, Edit, LogOut, Users, Tag, Link, X, Check, Ticket, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Trash2, Edit, LogOut, Users, Tag, Link, X, Check, Ticket, ToggleLeft, ToggleRight, RefreshCw, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminGuard from "@/components/AdminGuard";
 import { logout } from "@/lib/adminAuth";
@@ -30,6 +30,11 @@ export default function AdminOffers() {
 
   const ALL_PLANS = ["Monthly", "Quarterly", "Half Yearly", "Yearly", "PT 12 Sessions", "PT Every Day", "Dietitian Plan"];
   const [savingCoupon, setSavingCoupon] = useState(false);
+  const [savingEditCoupon, setSavingEditCoupon] = useState(false);
+  const [savingOffer, setSavingOffer] = useState(false);
+  const [updatingOffer, setUpdatingOffer] = useState(false);
+  const [deletingOfferId, setDeletingOfferId] = useState<string | null>(null);
+  const [deletingCouponId, setDeletingCouponId] = useState<string | null>(null);
 
   function resetCouponForm() {
     setCpCode(""); setCpDiscount(""); setCpPlans([]); setCpDesc(""); setCpEnabled(true);
