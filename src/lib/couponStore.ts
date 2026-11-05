@@ -1,19 +1,5 @@
-import { APPS_SCRIPT_URL } from "@/lib/sheets";
+import { supabase } from "@/lib/supabase";
 import { getOffers } from "@/lib/offersStore";
-
-const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
-
-// Purge any legacy localStorage cache keys so stale data NEVER persists locally
-if (typeof localStorage !== "undefined") {
-  try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && (k.startsWith("me_coupon") || k.startsWith("me_deleted_coupon"))) {
-        localStorage.removeItem(k);
-      }
-    }
-  } catch {}
-}
 
 export interface Coupon {
   id: string;
@@ -24,19 +10,20 @@ export interface Coupon {
   description?: string;
 }
 
-// ── In-Memory Cache (Live Session Only — Never persisted to localStorage) ─────
+// ── In-Memory Cache (Sub-millisecond access for UI) ─────────────────────────
 let inMemoryCoupons: Coupon[] = [];
 let isPullingCoupons = false;
+let realtimeSubscribed = false;
 
 // ── Smart Discount Parser & Sanitizer ────────────────────────────────────────
 export function parseDiscountPercent(val?: any, code?: string): number {
   if (typeof val === "number" && !isNaN(val)) {
-    if (val > 0 && val < 1) return Math.round(val * 100);
-    if (val > 1 && val <= 100) return Math.round(val);
+    if (val > 0 && val < 1) return Math.min(100, Math.round(val * 100));
+    if (val > 1) return Math.min(100, Math.round(val));
     if (val === 1) {
       if (code) {
         const m = code.match(/(\d{2})$/);
-        if (m) return parseInt(m[1], 10);
+        if (m) return Math.min(100, parseInt(m[1], 10));
       }
       return 25;
     }
@@ -62,7 +49,7 @@ export function parseDiscountPercent(val?: any, code?: string): number {
   }
 
   const raw = parseInt(str.replace(/\D/g, ""), 10);
-  if (!isNaN(raw) && raw >= 5 && raw <= 100) return raw;
+  if (!isNaN(raw) && raw >= 1) return Math.min(100, raw);
 
   return 25;
 }
@@ -90,67 +77,85 @@ export function dedupeCoupons(coupons: Coupon[]): Coupon[] {
   return result;
 }
 
-// ── Sheets API (Direct Fetch & Push — Zero Local Storage) ────────────────────
+function mapRowToCoupon(row: any): Coupon {
+  return {
+    id: String(row.id),
+    code: String(row.code || "").toUpperCase().trim(),
+    discount: parseDiscountPercent(row.discount, row.code),
+    plans: Array.isArray(row.plans) ? row.plans : [],
+    enabled: row.enabled !== false,
+    description: String(row.description || ""),
+  };
+}
 
-export async function pullFromSheets(retry = 2): Promise<Coupon[]> {
-  if (isPullingCoupons) return inMemoryCoupons;
-  isPullingCoupons = true;
+// ── Supabase Realtime Setup ──────────────────────────────────────────────────
+function setupRealtime() {
+  if (realtimeSubscribed || typeof window === "undefined") return;
+  realtimeSubscribed = true;
 
   try {
-    for (let attempt = 0; attempt <= retry; attempt++) {
-      try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?action=getCoupons&token=${T}&_t=${Date.now()}`, {
-          redirect: "follow",
-          cache: "no-store",
-        });
-        const text = await res.text();
-        const json = JSON.parse(text);
-        if (Array.isArray(json?.coupons)) {
-          const deduped = dedupeCoupons(json.coupons);
-          inMemoryCoupons = deduped;
-          window.dispatchEvent(new CustomEvent("couponsUpdated"));
-          return inMemoryCoupons;
+    supabase
+      .channel("public:coupons")
+      .on("postgres_changes", { event: "*", schema: "public", table: "coupons" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const newCp = mapRowToCoupon(payload.new);
+          inMemoryCoupons = dedupeCoupons([newCp, ...inMemoryCoupons]);
+        } else if (payload.eventType === "UPDATE") {
+          const updated = mapRowToCoupon(payload.new);
+          inMemoryCoupons = inMemoryCoupons.map((c) => (c.id === updated.id ? updated : c));
+        } else if (payload.eventType === "DELETE") {
+          const oldId = String((payload.old as any)?.id);
+          inMemoryCoupons = inMemoryCoupons.filter((c) => c.id !== oldId);
         }
-      } catch (e) {
-        if (attempt < retry) await new Promise(r => setTimeout(r, 600));
-      }
+        window.dispatchEvent(new CustomEvent("couponsUpdated"));
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn("Could not subscribe to Supabase coupon realtime:", err);
+  }
+}
+
+// ── Supabase API (Fast REST Queries) ─────────────────────────────────────────
+
+export async function pullFromSupabase(): Promise<Coupon[]> {
+  if (isPullingCoupons) return inMemoryCoupons;
+  isPullingCoupons = true;
+  setupRealtime();
+
+  try {
+    const { data, error } = await supabase
+      .from("coupons")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Supabase pull coupons warning:", error.message);
+      return inMemoryCoupons;
     }
+
+    if (Array.isArray(data)) {
+      const mapped = data.map(mapRowToCoupon);
+      inMemoryCoupons = dedupeCoupons(mapped);
+      window.dispatchEvent(new CustomEvent("couponsUpdated"));
+    }
+  } catch (err) {
+    console.warn("Failed to fetch coupons from Supabase:", err);
   } finally {
     isPullingCoupons = false;
   }
+
   return inMemoryCoupons;
 }
 
-async function pushToSheets(coupons: Coupon[]): Promise<boolean> {
-  const deduped = dedupeCoupons(coupons);
-  const dataStr = JSON.stringify(deduped);
-  const qs = new URLSearchParams({
-    action: "saveCoupons",
-    token: T,
-    data: dataStr,
-    _t: String(Date.now())
-  }).toString();
-  const url = `${APPS_SCRIPT_URL}?${qs}`;
-
-  try {
-    const res = await fetch(url, { method: "GET", redirect: "follow", cache: "no-store" });
-    await res.text();
-    return true;
-  } catch {
-    try {
-      await fetch(url, { method: "GET", mode: "no-cors" });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
+// Backward compatibility alias for existing callers
+export const pullFromSheets = pullFromSupabase;
+export const syncCouponsFromSheets = pullFromSupabase;
 
 // ── Public Store API ─────────────────────────────────────────────────────────
 
 export function getCoupons(): Coupon[] {
   if (inMemoryCoupons.length === 0 && !isPullingCoupons) {
-    pullFromSheets().catch(() => {});
+    pullFromSupabase().catch(() => {});
   }
   return inMemoryCoupons;
 }
@@ -159,40 +164,45 @@ export async function addCoupon(coupon: Omit<Coupon, "id">): Promise<Coupon[]> {
   const cleanCode = coupon.code.toUpperCase().trim();
   if (!cleanCode) return inMemoryCoupons;
 
-  // 1. Fetch latest from Sheets
-  const current = await pullFromSheets();
+  const finalDiscount = parseDiscountPercent(coupon.discount, cleanCode);
+  const newId = "coupon_" + Date.now();
 
-  // 2. If coupon with this code already exists, update it rather than duplicating
-  const existingIdx = current.findIndex(c => c.code.toUpperCase().trim() === cleanCode);
-  let next: Coupon[];
+  const newCoupon: Coupon = {
+    id: newId,
+    code: cleanCode,
+    discount: finalDiscount,
+    plans: coupon.plans || [],
+    enabled: coupon.enabled !== false,
+    description: coupon.description || "",
+  };
 
-  if (existingIdx !== -1) {
-    next = current.map((c, idx) => idx === existingIdx ? {
-      ...c,
-      ...coupon,
-      code: cleanCode,
-      discount: parseDiscountPercent(coupon.discount, cleanCode),
-    } : c);
-  } else {
-    next = [...current, {
-      id: "coupon_" + Date.now(),
-      ...coupon,
-      code: cleanCode,
-      discount: parseDiscountPercent(coupon.discount, cleanCode),
-    }];
-  }
-
-  const deduped = dedupeCoupons(next);
-  inMemoryCoupons = deduped;
+  // 1. Optimistic update in memory for immediate UI responsiveness
+  inMemoryCoupons = dedupeCoupons([newCoupon, ...inMemoryCoupons]);
   window.dispatchEvent(new CustomEvent("couponsUpdated"));
 
-  // 3. Persist directly to Google Sheets and await confirmation
-  await pushToSheets(deduped);
+  // 2. Persist to Supabase
+  try {
+    const { error } = await supabase.from("coupons").upsert({
+      id: newId,
+      code: cleanCode,
+      discount: finalDiscount,
+      plans: coupon.plans || [],
+      enabled: coupon.enabled !== false,
+      description: coupon.description || "",
+    }, { onConflict: "code" });
+
+    if (error) {
+      console.error("Supabase addCoupon error:", error);
+    }
+  } catch (err) {
+    console.error("Failed to add coupon to Supabase:", err);
+  }
+
   return inMemoryCoupons;
 }
 
 export async function updateCoupon(id: string, updated: Partial<Coupon>): Promise<Coupon[]> {
-  inMemoryCoupons = inMemoryCoupons.map(c => {
+  inMemoryCoupons = inMemoryCoupons.map((c) => {
     if (c.id !== id) return c;
     const nextObj = { ...c, ...updated };
     if (updated.discount !== undefined) {
@@ -203,29 +213,69 @@ export async function updateCoupon(id: string, updated: Partial<Coupon>): Promis
   inMemoryCoupons = dedupeCoupons(inMemoryCoupons);
   window.dispatchEvent(new CustomEvent("couponsUpdated"));
 
-  await pushToSheets(inMemoryCoupons);
+  try {
+    const target = inMemoryCoupons.find((c) => c.id === id);
+    if (target) {
+      const { error } = await supabase
+        .from("coupons")
+        .update({
+          code: target.code,
+          discount: target.discount,
+          plans: target.plans,
+          enabled: target.enabled,
+          description: target.description,
+        })
+        .eq("id", id);
+
+      if (error) console.error("Supabase updateCoupon error:", error);
+    }
+  } catch (err) {
+    console.error("Failed to update coupon in Supabase:", err);
+  }
+
   return inMemoryCoupons;
 }
 
 export async function removeCoupon(id: string): Promise<Coupon[]> {
-  inMemoryCoupons = inMemoryCoupons.filter(c => c.id !== id);
+  inMemoryCoupons = inMemoryCoupons.filter((c) => c.id !== id);
   window.dispatchEvent(new CustomEvent("couponsUpdated"));
 
-  await pushToSheets(inMemoryCoupons);
-  return await pullFromSheets();
+  try {
+    const { error } = await supabase.from("coupons").delete().eq("id", id);
+    if (error) console.error("Supabase removeCoupon error:", error);
+  } catch (err) {
+    console.error("Failed to remove coupon from Supabase:", err);
+  }
+
+  return inMemoryCoupons;
 }
 
 export async function saveCoupons(coupons: Coupon[]): Promise<boolean> {
   inMemoryCoupons = dedupeCoupons(coupons);
   window.dispatchEvent(new CustomEvent("couponsUpdated"));
-  return await pushToSheets(inMemoryCoupons);
+
+  try {
+    const rows = inMemoryCoupons.map((c) => ({
+      id: c.id,
+      code: c.code,
+      discount: c.discount,
+      plans: c.plans,
+      enabled: c.enabled,
+      description: c.description || "",
+    }));
+
+    const { error } = await supabase.from("coupons").upsert(rows, { onConflict: "code" });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export async function ensureCouponExists(code: string, discount = 25, description?: string): Promise<void> {
   const cleanCode = code.toUpperCase().trim();
   if (!cleanCode) return;
 
-  const existing = inMemoryCoupons.find(c => c.code === cleanCode);
+  const existing = inMemoryCoupons.find((c) => c.code === cleanCode);
   if (existing) {
     if (existing.discount <= 1) {
       const healed = parseDiscountPercent(discount, cleanCode);
@@ -240,7 +290,7 @@ export async function ensureCouponExists(code: string, discount = 25, descriptio
     discount: finalDisc,
     plans: [],
     enabled: true,
-    description: description || `Coupon for ${cleanCode}`
+    description: description || `Coupon for ${cleanCode}`,
   });
 }
 
@@ -249,17 +299,19 @@ export function validateCoupon(code: string, planName: string): { discount: numb
   if (!cleanCode) return null;
 
   let coupons = getCoupons();
-  let coupon = coupons.find(c => c.code === cleanCode && c.enabled);
+  let coupon = coupons.find((c) => c.code === cleanCode && c.enabled);
 
   if (!coupon) {
     try {
       const activeOffers = getOffers();
-      const matchedOffer = activeOffers.find((o: any) => o.couponCode && o.couponCode.toUpperCase().trim() === cleanCode && o.status !== "expired");
+      const matchedOffer = activeOffers.find(
+        (o: any) => o.couponCode && o.couponCode.toUpperCase().trim() === cleanCode && o.status !== "expired"
+      );
       if (matchedOffer) {
         const discNum = parseDiscountPercent(matchedOffer.discount, cleanCode);
         ensureCouponExists(cleanCode, discNum, `${matchedOffer.title} Offer Coupon`);
         coupons = getCoupons();
-        coupon = coupons.find(c => c.code === cleanCode && c.enabled);
+        coupon = coupons.find((c) => c.code === cleanCode && c.enabled);
       }
     } catch {}
   }
@@ -269,5 +321,37 @@ export function validateCoupon(code: string, planName: string): { discount: numb
   return { discount: parseDiscountPercent(coupon.discount, coupon.code), coupon };
 }
 
-// Legacy async compat shim
-export async function syncCouponsFromSheets(): Promise<void> { await pullFromSheets(); }
+// Instant async validation direct to Supabase for 100% guarantee
+export async function validateCouponDirect(code: string, planName: string): Promise<{ discount: number; coupon: Coupon } | null> {
+  const cleanCode = code.toUpperCase().trim();
+  if (!cleanCode) return null;
+
+  // Check in-memory first for 0ms response
+  const cached = validateCoupon(cleanCode, planName);
+  if (cached) return cached;
+
+  // Fallback to direct Supabase query (~30ms)
+  try {
+    const { data, error } = await supabase
+      .from("coupons")
+      .select("*")
+      .eq("code", cleanCode)
+      .eq("enabled", true)
+      .single();
+
+    if (error || !data) return null;
+
+    const coupon = mapRowToCoupon(data);
+    inMemoryCoupons = dedupeCoupons([coupon, ...inMemoryCoupons]);
+
+    if (coupon.plans && coupon.plans.length > 0 && !coupon.plans.includes(planName)) return null;
+    return { discount: coupon.discount, coupon };
+  } catch {
+    return null;
+  }
+}
+
+// Auto-fetch on app load
+if (typeof window !== "undefined") {
+  pullFromSupabase().catch(() => {});
+}

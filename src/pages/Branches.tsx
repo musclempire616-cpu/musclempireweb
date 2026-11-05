@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase";
 import { useState, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 import PlanNavbar from "@/components/PlanNavbar";
 import Footer from "@/components/Footer";
-import { APPS_SCRIPT_URL } from "@/lib/sheets";
+
 
 const OWNER_PHONE = "919137870108";
 
@@ -177,15 +178,14 @@ export default function Branches() {
     setFormErrors({});
 
     const today = new Date().toLocaleDateString("en-IN");
-    fetch(`${APPS_SCRIPT_URL}?${new URLSearchParams({
-      action: "enquiry",
-      date: today,
+    supabase.from("inquiries").insert([{
       name: formData.name,
       phone: formData.phone,
       age: formData.age || "N/A",
-      goal: `Branch Inquiry: ${formData.branch}`,
-      notes: formData.notes || "Branch page quick inquiry"
-    })}`, { redirect: "follow" }).catch(() => null);
+      goal: "Branch Inquiry: " + formData.branch,
+      notes: formData.notes || "Branch page quick inquiry",
+      branch: formData.branch
+    }]).then(() => {});
 
     const msg = encodeURIComponent(
       `Hi Muscle Empire! I am interested in visiting your *${formData.branch}*.\n\n*Name:* ${formData.name}\n*Phone:* ${formData.phone}\n*Age:* ${formData.age || "N/A"}\n*Notes:* ${formData.notes || "Trial Request"}`

@@ -1,23 +1,10 @@
 import type { Offer } from "@/data/offers";
-import { APPS_SCRIPT_URL } from "@/lib/sheets";
+import { supabase } from "@/lib/supabase";
 
-const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
-
-// Purge any legacy localStorage cache keys so stale data NEVER persists locally
-if (typeof localStorage !== "undefined") {
-  try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && (k.startsWith("me_offers") || k.startsWith("me_deleted_offers"))) {
-        localStorage.removeItem(k);
-      }
-    }
-  } catch {}
-}
-
-// ── In-Memory Cache (Live Session Only — Never persisted to localStorage) ─────
+// ── In-Memory Cache (Live Session Only) ──────────────────────────────────────
 let inMemoryOffers: Offer[] = [];
 let isFetchingOffers = false;
+let realtimeSubscribed = false;
 
 // ── Deduplication Helper ──────────────────────────────────────────────────────
 export function dedupeOffers(offers: Offer[]): Offer[] {
@@ -45,7 +32,7 @@ export function dedupeOffers(offers: Offer[]): Offer[] {
   return result;
 }
 
-// ── Date/Time Formatter (normal readable 24:00 format) ────────────────────────
+// ── Date/Time Formatter (normal readable format) ─────────────────────────────
 export function formatOfferDateTime(val?: string): string {
   if (!val) return "";
   const trimmed = val.trim();
@@ -69,9 +56,7 @@ export function formatOfferDateTime(val?: string): string {
         const hours = d.getHours();
         const mins = d.getMinutes();
         const minsStr = mins < 10 ? `0${mins}` : `${mins}`;
-        const timePart = (hours === 0 && mins === 0)
-          ? "24:00"
-          : `${hours < 10 ? `0${hours}` : hours}:${minsStr}`;
+        const timePart = hours === 0 && mins === 0 ? "24:00" : `${hours < 10 ? `0${hours}` : hours}:${minsStr}`;
         return `${datePart}, ${timePart}`;
       }
 
@@ -106,163 +91,192 @@ export function normalizeImageUrl(url?: string): string {
   return u;
 }
 
-// ── Metadata Tag Encoder/Decoder ─────────────────────────────────────────────
-// Encodes couponCode into description so it survives Sheets sync without requiring backend schema change
-const COUPON_TAG_REGEX = /\[COUPON:\s*([A-Z0-9_-]+)\]/i;
-
-function encodeOfferForSheets(offer: Offer): Offer {
-  const normImage = normalizeImageUrl(offer.image);
-  let desc = (offer.description || "").replace(new RegExp(COUPON_TAG_REGEX, "gi"), "").trim();
-  const cleanCoupon = (offer.couponCode || "").trim().toUpperCase();
-  if (cleanCoupon) {
-    desc = desc ? `${desc}\n[COUPON:${cleanCoupon}]` : `[COUPON:${cleanCoupon}]`;
-  }
+function mapRowToOffer(row: any): Offer {
   return {
-    ...offer,
-    description: desc,
-    image: normImage?.startsWith("data:") ? "" : normImage,
+    id: String(row.id),
+    title: String(row.title || "").trim(),
+    subtitle: String(row.subtitle || ""),
+    description: String(row.description || ""),
+    discount: String(row.discount || ""),
+    badge: String(row.badge || ""),
+    validTill: String(row.valid_till || ""),
+    ctaText: String(row.cta_text || "Claim Offer"),
+    whatsappMessage: String(row.whatsapp_message || ""),
+    couponCode: row.coupon_code ? String(row.coupon_code).trim().toUpperCase() : undefined,
+    status: (row.status || "active") as "active" | "upcoming" | "expired",
+    image: normalizeImageUrl(row.image),
+    isFeatured: row.is_featured !== false,
+    showInPopup: row.show_in_popup !== false,
   };
 }
 
-function decodeOfferFromSheets(offer: Offer): Offer {
-  let desc = offer.description || "";
-  let couponCode = offer.couponCode;
-
-  // Extract from metadata tag in description if present
-  const match = desc.match(COUPON_TAG_REGEX);
-  if (match) {
-    couponCode = match[1].toUpperCase().trim();
-    desc = desc.replace(new RegExp(COUPON_TAG_REGEX, "gi"), "").trim();
-  }
-
+function mapOfferToRow(offer: Offer | Omit<Offer, "id">, id?: string): any {
   return {
-    ...offer,
-    description: desc,
-    couponCode: couponCode || undefined,
+    id: id || (offer as any).id,
+    title: offer.title.trim(),
+    subtitle: offer.subtitle || "",
+    description: offer.description || "",
+    discount: offer.discount || "",
+    badge: offer.badge || "",
+    valid_till: offer.validTill || "",
+    cta_text: offer.ctaText || "Claim Offer",
+    whatsapp_message: offer.whatsappMessage || "",
+    coupon_code: offer.couponCode ? offer.couponCode.trim().toUpperCase() : "",
+    status: offer.status || "active",
     image: normalizeImageUrl(offer.image),
+    is_featured: offer.isFeatured !== false,
+    show_in_popup: offer.showInPopup !== false,
   };
 }
 
-// ── Pure Sheets API (Direct Fetch & Save — Zero Local Storage) ───────────────
-
-export async function pullOffersFromSheets(retry = 2): Promise<Offer[]> {
-  if (isFetchingOffers) return inMemoryOffers;
-  isFetchingOffers = true;
+// ── Supabase Realtime Setup ──────────────────────────────────────────────────
+function setupRealtime() {
+  if (realtimeSubscribed || typeof window === "undefined") return;
+  realtimeSubscribed = true;
 
   try {
-    for (let attempt = 0; attempt <= retry; attempt++) {
-      try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?action=getOffers&token=${T}&_t=${Date.now()}`, {
-          redirect: "follow",
-          cache: "no-store",
-        });
-        const text = await res.text();
-        const json = JSON.parse(text);
-        if (Array.isArray(json?.offers)) {
-          const decoded = json.offers.map(decodeOfferFromSheets);
-          const deduped = dedupeOffers(decoded);
-          inMemoryOffers = deduped;
-          window.dispatchEvent(new CustomEvent("offersUpdated"));
-          return inMemoryOffers;
+    supabase
+      .channel("public:offers")
+      .on("postgres_changes", { event: "*", schema: "public", table: "offers" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const newOffer = mapRowToOffer(payload.new);
+          inMemoryOffers = dedupeOffers([newOffer, ...inMemoryOffers]);
+        } else if (payload.eventType === "UPDATE") {
+          const updated = mapRowToOffer(payload.new);
+          inMemoryOffers = inMemoryOffers.map((o) => (o.id === updated.id ? updated : o));
+        } else if (payload.eventType === "DELETE") {
+          const oldId = String((payload.old as any)?.id);
+          inMemoryOffers = inMemoryOffers.filter((o) => o.id !== oldId);
         }
-      } catch (e) {
-        if (attempt < retry) await new Promise(r => setTimeout(r, 600));
-      }
+        window.dispatchEvent(new CustomEvent("offersUpdated"));
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn("Could not subscribe to Supabase offer realtime:", err);
+  }
+}
+
+// ── Supabase API (Fast REST Queries) ─────────────────────────────────────────
+
+export async function pullOffersFromSupabase(): Promise<Offer[]> {
+  if (isFetchingOffers) return inMemoryOffers;
+  isFetchingOffers = true;
+  setupRealtime();
+
+  try {
+    const { data, error } = await supabase
+      .from("offers")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Supabase pull offers warning:", error.message);
+      return inMemoryOffers;
     }
+
+    if (Array.isArray(data)) {
+      const mapped = data.map(mapRowToOffer);
+      inMemoryOffers = dedupeOffers(mapped);
+      window.dispatchEvent(new CustomEvent("offersUpdated"));
+    }
+  } catch (err) {
+    console.warn("Failed to fetch offers from Supabase:", err);
   } finally {
     isFetchingOffers = false;
   }
+
   return inMemoryOffers;
 }
 
-async function pushToSheets(offers: Offer[]): Promise<boolean> {
-  const deduped = dedupeOffers(offers);
-  const prepared = deduped.map(encodeOfferForSheets);
-  const dataStr = JSON.stringify(prepared);
-  const qs = new URLSearchParams({
-    action: "saveOffers",
-    token: T,
-    data: dataStr,
-    _t: String(Date.now())
-  }).toString();
-  const url = `${APPS_SCRIPT_URL}?${qs}`;
-
-  try {
-    const res = await fetch(url, { method: "GET", redirect: "follow", cache: "no-store" });
-    await res.text();
-    return true;
-  } catch {
-    try {
-      await fetch(url, { method: "GET", mode: "no-cors" });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
+// Backward compatibility alias for existing components
+export const pullOffersFromSheets = pullOffersFromSupabase;
 
 // ── Public Store API ─────────────────────────────────────────────────────────
 
 export function getOffers(): Offer[] {
-  // If memory is empty, kick off a live fetch from Sheets immediately
   if (inMemoryOffers.length === 0 && !isFetchingOffers) {
-    pullOffersFromSheets().catch(() => {});
+    pullOffersFromSupabase().catch(() => {});
   }
   return inMemoryOffers;
 }
 
 export function getOffersAndSync(): Offer[] {
-  pullOffersFromSheets().catch(() => {});
+  pullOffersFromSupabase().catch(() => {});
   return inMemoryOffers;
 }
 
 export async function addOffer(offer: Omit<Offer, "id">): Promise<Offer[]> {
-  // 1. Fetch latest directly from Google Sheets to avoid adding over stale data
-  const latest = await pullOffersFromSheets();
-
-  // 2. Prevent duplicate offer titles
   const cleanTitle = offer.title.trim().toLowerCase();
-  if (latest.some(o => o.title.trim().toLowerCase() === cleanTitle)) {
-    return latest;
+  if (inMemoryOffers.some((o) => o.title.trim().toLowerCase() === cleanTitle)) {
+    return inMemoryOffers;
   }
 
+  const newId = "offer_" + Date.now();
   const newOffer: Offer = {
-    id: "offer_" + Date.now(),
+    id: newId,
     ...offer,
     title: offer.title.trim(),
     image: normalizeImageUrl(offer.image),
   };
 
-  const next = dedupeOffers([...latest, newOffer]);
-  inMemoryOffers = next;
+  // 1. Optimistic update in memory
+  inMemoryOffers = dedupeOffers([newOffer, ...inMemoryOffers]);
   window.dispatchEvent(new CustomEvent("offersUpdated"));
 
-  // 3. Persist directly to Google Sheets and await confirmation
-  await pushToSheets(next);
+  // 2. Persist to Supabase
+  try {
+    const row = mapOfferToRow(newOffer, newId);
+    const { error } = await supabase.from("offers").insert([row]);
+    if (error) console.error("Supabase addOffer error:", error);
+  } catch (err) {
+    console.error("Failed to add offer to Supabase:", err);
+  }
+
   return inMemoryOffers;
 }
 
 export async function removeOffer(id: string): Promise<Offer[]> {
-  // 1. Remove from in-memory immediately
-  inMemoryOffers = inMemoryOffers.filter(o => o.id !== id);
+  inMemoryOffers = inMemoryOffers.filter((o) => o.id !== id);
   window.dispatchEvent(new CustomEvent("offersUpdated"));
 
-  // 2. Persist deletion directly to Google Sheets and await confirmation
-  await pushToSheets(inMemoryOffers);
+  try {
+    const { error } = await supabase.from("offers").delete().eq("id", id);
+    if (error) console.error("Supabase removeOffer error:", error);
+  } catch (err) {
+    console.error("Failed to remove offer from Supabase:", err);
+  }
 
-  // 3. Confirm with fresh live pull from Sheets so it can never resurrect
-  return await pullOffersFromSheets();
+  return inMemoryOffers;
 }
 
 export async function updateOffer(id: string, updated: Partial<Offer>): Promise<Offer[]> {
-  inMemoryOffers = inMemoryOffers.map(o => o.id === id ? {
-    ...o,
-    ...updated,
-    image: updated.image !== undefined ? normalizeImageUrl(updated.image) : o.image
-  } : o);
+  inMemoryOffers = inMemoryOffers.map((o) =>
+    o.id === id
+      ? {
+          ...o,
+          ...updated,
+          image: updated.image !== undefined ? normalizeImageUrl(updated.image) : o.image,
+        }
+      : o
+  );
   inMemoryOffers = dedupeOffers(inMemoryOffers);
   window.dispatchEvent(new CustomEvent("offersUpdated"));
 
-  await pushToSheets(inMemoryOffers);
+  try {
+    const target = inMemoryOffers.find((o) => o.id === id);
+    if (target) {
+      const row = mapOfferToRow(target, id);
+      const { error } = await supabase.from("offers").update(row).eq("id", id);
+      if (error) console.error("Supabase updateOffer error:", error);
+    }
+  } catch (err) {
+    console.error("Failed to update offer in Supabase:", err);
+  }
+
   return inMemoryOffers;
+}
+
+// Auto-fetch on app load
+if (typeof window !== "undefined") {
+  pullOffersFromSupabase().catch(() => {});
 }

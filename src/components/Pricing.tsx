@@ -8,7 +8,7 @@ import femaleBg from "@/assets/images/female-bg.webp";
 import { PricingModal } from "@/components/ui/pricing-table";
 import type { PricingPlan, PricingFeature } from "@/components/ui/pricing-table";
 import { openRazorpay } from "@/lib/razorpay";
-import { validateCoupon } from "@/lib/couponStore";
+import { validateCoupon, validateCouponDirect } from "@/lib/couponStore";
 
 /* ── Unisex gym data ──────────────────────────────────────── */
 // Gym-only plans (used as base; CrossFit & Gym+CF toggled in GymCard)
@@ -372,23 +372,23 @@ export default function Pricing() {
   const [ptEdDiscount, setPtEdDiscount] = useState(0);
   const [showPtEdCoupon, setShowPtEdCoupon] = useState(false);
 
-  function applyDietCoupon() {
-    const result = validateCoupon(dietCoupon, "Dietitian Plan");
+  async function applyDietCoupon() {
+    const result = await validateCouponDirect(dietCoupon, "Dietitian Plan");
     if (result) { setDietDiscount(result.discount); setDietCouponMsg({ text: `${result.discount}% OFF applied!`, valid: true }); }
     else { setDietDiscount(0); setDietCouponMsg({ text: "Invalid or expired coupon", valid: false }); }
   }
-  function applyPtCoupon() {
-    const result = validateCoupon(ptCoupon, "Personal Training Plan");
+  async function applyPtCoupon() {
+    const result = await validateCouponDirect(ptCoupon, "Personal Training Plan");
     if (result) { setPtDiscount(result.discount); setPtCouponMsg({ text: `${result.discount}% OFF applied!`, valid: true }); }
     else { setPtDiscount(0); setPtCouponMsg({ text: "Invalid or expired coupon", valid: false }); }
   }
-  function applyPt12Coupon() {
-    const result = validateCoupon(pt12Coupon, "PT 12 Sessions");
+  async function applyPt12Coupon() {
+    const result = await validateCouponDirect(pt12Coupon, "PT 12 Sessions");
     if (result) { setPt12Discount(result.discount); setPt12Msg({ text: `${result.discount}% OFF applied!`, valid: true }); }
     else { setPt12Discount(0); setPt12Msg({ text: "Invalid or expired coupon", valid: false }); }
   }
-  function applyPtEdCoupon() {
-    const result = validateCoupon(ptEdCoupon, "PT Every Day");
+  async function applyPtEdCoupon() {
+    const result = await validateCouponDirect(ptEdCoupon, "PT Every Day");
     if (result) { setPtEdDiscount(result.discount); setPtEdMsg({ text: `${result.discount}% OFF applied!`, valid: true }); }
     else { setPtEdDiscount(0); setPtEdMsg({ text: "Invalid or expired coupon", valid: false }); }
   }

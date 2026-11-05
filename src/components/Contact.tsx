@@ -1,7 +1,8 @@
+import { supabase } from "@/lib/supabase";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, MapPin, Mail, CheckCircle2, Clock, User, Building2, FileText } from "lucide-react";
-import { APPS_SCRIPT_URL } from "@/lib/sheets";
+
 
 const OWNER_PHONE = "919137870108";
 
@@ -60,15 +61,15 @@ export default function Contact() {
     const selectedGoals = selectedGoalsList.length > 0 ? selectedGoalsList.join(", ") : "N/A";
     const notesStr = `Email: ${form.email}\nMessage: ${form.message}`;
     
-    fetch(`${APPS_SCRIPT_URL}?${new URLSearchParams({ 
-      action: "enquiry", 
-      date: today, 
-      name: fullName, 
-      phone: form.phone, 
-      age: form.age, 
-      goal: selectedGoals, 
-      notes: notesStr 
-    })}`, { redirect: "follow" }).catch(() => null);
+    supabase.from("inquiries").insert([{
+      name: fullName,
+      phone: form.phone,
+      email: form.email,
+      age: form.age,
+      goal: selectedGoals,
+      notes: form.message,
+      branch: "Contact Form"
+    }]).then(() => {});
     
     const msg = encodeURIComponent(`Hi! I'd like to get in touch with Muscle Empire.\n\n*Name:* ${fullName}\n*Phone:* ${form.phone}\n*Email:* ${form.email || "N/A"}\n*Age:* ${form.age}\n*Goal:* ${selectedGoals}\n*Message:* ${form.message}`);
     

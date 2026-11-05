@@ -5,7 +5,7 @@ import { CheckIcon } from "@radix-ui/react-icons"
 import NumberFlow from "@number-flow/react"
 import { X, ArrowRight } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
-import { validateCoupon, getCoupons, syncCouponsFromSheets } from "@/lib/couponStore"
+import { validateCoupon, validateCouponDirect, getCoupons, syncCouponsFromSheets } from "@/lib/couponStore"
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -75,7 +75,7 @@ export function PricingTable({
 
   async function applyCoupon() {
     const code = couponInput.trim().toUpperCase()
-    const result = validateCoupon(code, selectedPlan)
+    const result = await validateCouponDirect(code, selectedPlan)
     if (result) {
       setDiscount(result.discount)
       setAppliedCoupon(code)
@@ -115,14 +115,15 @@ export function PricingTable({
       const cleanCode = code.trim().toUpperCase()
       setShowCoupon(true)
       setCouponInput(cleanCode)
-      const result = validateCoupon(cleanCode, selectedPlan)
-      if (result) {
-        setDiscount(result.discount)
-        setAppliedCoupon(cleanCode)
-        setCouponStatus("valid")
-      } else {
-        setCouponStatus("invalid")
-      }
+      validateCouponDirect(cleanCode, selectedPlan).then((result) => {
+        if (result) {
+          setDiscount(result.discount);
+          setAppliedCoupon(cleanCode);
+          setCouponStatus("valid");
+        } else {
+          setCouponStatus("invalid");
+        }
+      });
     }
   }, [])
 

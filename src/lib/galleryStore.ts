@@ -1,6 +1,4 @@
-import { APPS_SCRIPT_URL } from "@/lib/sheets";
-
-const T = ["ZujXfS4o6t","pRWL2vQmAT","JbEFBaVKCs","1O7UGPqDyk"].join("");
+import { supabase } from "@/lib/supabase";
 
 const IMAGES_KEY = "me_gallery_images_v5";
 const VIDEOS_KEY = "me_gallery_videos_v5";
@@ -11,6 +9,7 @@ export interface GalleryVideo { id: string; src: string; alt: string; thumbnail?
 
 let isSavingImages = false;
 let isSavingVideos = false;
+let realtimeSubscribed = false;
 
 // ── Strict deduplication by normalized URL ───────────────────────────────────
 
@@ -39,111 +38,109 @@ export function dedupeVideos(videos: GalleryVideo[]): GalleryVideo[] {
 // ── localStorage helpers ─────────────────────────────────────────────────────
 
 function recordLocalEdit(): void {
-  localStorage.setItem(LAST_EDIT_KEY, String(Date.now()));
+  try { localStorage.setItem(LAST_EDIT_KEY, String(Date.now())); } catch {}
 }
 
 function isRecentLocalEdit(): boolean {
-  const ts = parseInt(localStorage.getItem(LAST_EDIT_KEY) || "0", 10);
-  return Date.now() - ts < 15_000;
+  try {
+    const ts = parseInt(localStorage.getItem(LAST_EDIT_KEY) || "0", 10);
+    return Date.now() - ts < 15_000;
+  } catch {
+    return false;
+  }
 }
 
 function getLocalImages(): GalleryImage[] {
   try {
-    const item = localStorage.getItem(IMAGES_KEY);
-    if (!item) return [];
-    return dedupeImages(JSON.parse(item));
-  } catch { return []; }
+    const raw = JSON.parse(localStorage.getItem(IMAGES_KEY) || "[]");
+    return Array.isArray(raw) ? dedupeImages(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 function saveLocalImages(images: GalleryImage[]): void {
-  const deduped = dedupeImages(images);
-  localStorage.setItem(IMAGES_KEY, JSON.stringify(deduped));
+  try { localStorage.setItem(IMAGES_KEY, JSON.stringify(images)); } catch {}
 }
 
 function getLocalVideos(): GalleryVideo[] {
   try {
-    const item = localStorage.getItem(VIDEOS_KEY);
-    if (!item) return [];
-    return dedupeVideos(JSON.parse(item));
-  } catch { return []; }
+    const raw = JSON.parse(localStorage.getItem(VIDEOS_KEY) || "[]");
+    return Array.isArray(raw) ? dedupeVideos(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 function saveLocalVideos(videos: GalleryVideo[]): void {
-  const deduped = dedupeVideos(videos);
-  localStorage.setItem(VIDEOS_KEY, JSON.stringify(deduped));
+  try { localStorage.setItem(VIDEOS_KEY, JSON.stringify(videos)); } catch {}
 }
 
-// ── Google Sheets API ────────────────────────────────────────────────────────
-
-async function fetchImagesFromSheets(retry = 1): Promise<GalleryImage[] | null> {
-  for (let attempt = 0; attempt <= retry; attempt++) {
-    try {
-      const res = await fetch(`${APPS_SCRIPT_URL}?action=getImages&token=${T}&_t=${Date.now()}`, {
-        redirect: "follow", cache: "no-store",
-      });
-      const text = await res.text();
-      const json = JSON.parse(text);
-      if (Array.isArray(json?.images)) return json.images;
-    } catch {
-      if (attempt < retry) await new Promise(r => setTimeout(r, 600));
-    }
-  }
-  return null;
-}
-
-async function saveImagesToSheets(images: GalleryImage[]): Promise<boolean> {
-  const deduped = dedupeImages(images);
-  const dataStr = JSON.stringify(deduped);
-  const qs = new URLSearchParams({ action: "saveImages", token: T, data: dataStr, _t: String(Date.now()) }).toString();
-  const url = `${APPS_SCRIPT_URL}?${qs}`;
+// ── Supabase Realtime Setup ──────────────────────────────────────────────────
+function setupRealtime() {
+  if (realtimeSubscribed || typeof window === "undefined") return;
+  realtimeSubscribed = true;
 
   try {
-    const res = await fetch(url, { method: "GET", redirect: "follow", cache: "no-store" });
-    await res.text();
-    return true;
-  } catch {
-    try {
-      await fetch(url, { method: "GET", mode: "no-cors" });
-      return true;
-    } catch {
-      return false;
-    }
+    supabase
+      .channel("public:gallery")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gallery" }, () => {
+        syncImagesFromSheets().catch(() => {});
+        syncVideosFromSheets().catch(() => {});
+        window.dispatchEvent(new CustomEvent("galleryUpdated"));
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn("Could not subscribe to Supabase gallery realtime:", err);
   }
 }
 
-async function fetchVideosFromSheets(retry = 1): Promise<GalleryVideo[] | null> {
-  for (let attempt = 0; attempt <= retry; attempt++) {
-    try {
-      const res = await fetch(`${APPS_SCRIPT_URL}?action=getVideos&token=${T}&_t=${Date.now()}`, {
-        redirect: "follow", cache: "no-store",
-      });
-      const text = await res.text();
-      const json = JSON.parse(text);
-      if (Array.isArray(json?.videos)) return json.videos;
-    } catch {
-      if (attempt < retry) await new Promise(r => setTimeout(r, 600));
-    }
-  }
-  return null;
-}
+// ── Supabase API Sync Functions ──────────────────────────────────────────────
 
-async function saveVideosToSheets(videos: GalleryVideo[]): Promise<boolean> {
-  const deduped = dedupeVideos(videos);
-  const dataStr = JSON.stringify(deduped);
-  const qs = new URLSearchParams({ action: "saveVideos", token: T, data: dataStr, _t: String(Date.now()) }).toString();
-  const url = `${APPS_SCRIPT_URL}?${qs}`;
-
+async function fetchImagesFromSupabase(): Promise<GalleryImage[] | null> {
+  setupRealtime();
   try {
-    const res = await fetch(url, { method: "GET", redirect: "follow", cache: "no-store" });
-    await res.text();
-    return true;
-  } catch {
-    try {
-      await fetch(url, { method: "GET", mode: "no-cors" });
-      return true;
-    } catch {
-      return false;
+    const { data, error } = await supabase
+      .from("gallery")
+      .select("*")
+      .eq("type", "image")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Supabase fetch images error:", error.message);
+      return null;
     }
+    return (data || []).map((row: any) => ({
+      id: String(row.id),
+      src: String(row.src),
+      alt: String(row.alt || ""),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+async function fetchVideosFromSupabase(): Promise<GalleryVideo[] | null> {
+  setupRealtime();
+  try {
+    const { data, error } = await supabase
+      .from("gallery")
+      .select("*")
+      .eq("type", "video")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Supabase fetch videos error:", error.message);
+      return null;
+    }
+    return (data || []).map((row: any) => ({
+      id: String(row.id),
+      src: String(row.src),
+      alt: String(row.alt || ""),
+      thumbnail: row.thumbnail || undefined,
+    }));
+  } catch {
+    return null;
   }
 }
 
@@ -161,16 +158,10 @@ export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
     return getLocalImages();
   }
 
-  const remote = await fetchImagesFromSheets();
+  const remote = await fetchImagesFromSupabase();
   if (remote !== null) {
-    if (isRecentLocalEdit() || isSavingImages) {
-      return getLocalImages();
-    }
     const dedupedRemote = dedupeImages(remote);
     saveLocalImages(dedupedRemote);
-    if (remote.length > dedupedRemote.length) {
-      saveImagesToSheets(dedupedRemote).catch(() => {});
-    }
     window.dispatchEvent(new CustomEvent("galleryUpdated"));
     return dedupedRemote;
   }
@@ -191,8 +182,8 @@ export function addGalleryImage(src: string, alt: string): void {
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
 
   isSavingImages = true;
-  saveImagesToSheets(deduped).finally(() => {
-    setTimeout(() => { isSavingImages = false; }, 2000);
+  supabase.from("gallery").upsert({ id: newId, type: "image", src: src.trim(), alt: alt.trim() }).then(() => {
+    setTimeout(() => { isSavingImages = false; }, 1000);
   });
 }
 
@@ -204,8 +195,8 @@ export function removeGalleryImage(id: string): void {
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
 
   isSavingImages = true;
-  saveImagesToSheets(deduped).finally(() => {
-    setTimeout(() => { isSavingImages = false; }, 2000);
+  supabase.from("gallery").delete().eq("id", id).then(() => {
+    setTimeout(() => { isSavingImages = false; }, 1000);
   });
 }
 
@@ -223,16 +214,10 @@ export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
     return getLocalVideos();
   }
 
-  const remote = await fetchVideosFromSheets();
+  const remote = await fetchVideosFromSupabase();
   if (remote !== null) {
-    if (isRecentLocalEdit() || isSavingVideos) {
-      return getLocalVideos();
-    }
     const dedupedRemote = dedupeVideos(remote);
     saveLocalVideos(dedupedRemote);
-    if (remote.length > dedupedRemote.length) {
-      saveVideosToSheets(dedupedRemote).catch(() => {});
-    }
     window.dispatchEvent(new CustomEvent("galleryUpdated"));
     return dedupedRemote;
   }
@@ -253,8 +238,8 @@ export function addGalleryVideo(src: string, alt: string, thumbnail?: string): v
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
 
   isSavingVideos = true;
-  saveVideosToSheets(deduped).finally(() => {
-    setTimeout(() => { isSavingVideos = false; }, 2000);
+  supabase.from("gallery").upsert({ id: newId, type: "video", src: src.trim(), alt: alt.trim(), thumbnail: thumbnail || "" }).then(() => {
+    setTimeout(() => { isSavingVideos = false; }, 1000);
   });
 }
 
@@ -266,7 +251,7 @@ export function removeGalleryVideo(id: string): void {
   window.dispatchEvent(new CustomEvent("galleryUpdated"));
 
   isSavingVideos = true;
-  saveVideosToSheets(deduped).finally(() => {
-    setTimeout(() => { isSavingVideos = false; }, 2000);
+  supabase.from("gallery").delete().eq("id", id).then(() => {
+    setTimeout(() => { isSavingVideos = false; }, 1000);
   });
 }

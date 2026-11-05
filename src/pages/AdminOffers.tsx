@@ -42,8 +42,17 @@ export default function AdminOffers() {
 
   function handleAddCoupon() {
     if (!cpCode.trim() || !cpDiscount.trim()) { alert("Code and discount are required"); return; }
+    const discNum = Number(cpDiscount.trim());
+    if (isNaN(discNum) || discNum <= 0) {
+      alert("Please enter a valid positive discount percentage.");
+      return;
+    }
+    if (discNum > 100) {
+      alert("Error: Discount limit cannot exceed 100%! Please enter a value between 1% and 100%.");
+      return;
+    }
     setSavingCoupon(true);
-    addCoupon({ code: cpCode.trim().toUpperCase(), discount: parseDiscountPercent(cpDiscount, cpCode), plans: cpPlans, description: cpDesc.trim(), enabled: cpEnabled });
+    addCoupon({ code: cpCode.trim().toUpperCase(), discount: discNum, plans: cpPlans, description: cpDesc.trim(), enabled: cpEnabled });
     setCoupons(getCoupons());
     resetCouponForm();
     setShowAddCoupon(false);
@@ -52,7 +61,16 @@ export default function AdminOffers() {
 
   function handleUpdateCoupon() {
     if (!editingCoupon) return;
-    updateCoupon(editingCoupon.id, { ...editingCoupon, discount: parseDiscountPercent(editingCoupon.discount, editingCoupon.code) });
+    const discNum = Number(editingCoupon.discount);
+    if (isNaN(discNum) || discNum <= 0) {
+      alert("Please enter a valid positive discount percentage.");
+      return;
+    }
+    if (discNum > 100) {
+      alert("Error: Discount limit cannot exceed 100%! Please enter a value between 1% and 100%.");
+      return;
+    }
+    updateCoupon(editingCoupon.id, { ...editingCoupon, discount: discNum });
     setCoupons(getCoupons());
     setEditingCoupon(null);
   }
@@ -406,7 +424,22 @@ export default function AdminOffers() {
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs text-white/50 uppercase tracking-wider font-bold">Discount %</label>
-                      <input value={cpDiscount} onChange={e => setCpDiscount(e.target.value)} type="number" min="1" max="100" placeholder="e.g. 25" className="h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-sm outline-none focus:border-yellow-400/50 transition-colors" />
+                      <input
+                        value={cpDiscount}
+                        onChange={e => setCpDiscount(e.target.value)}
+                        type="number"
+                        min="1"
+                        max="100"
+                        placeholder="e.g. 25"
+                        className={`h-10 bg-white/5 border rounded-xl px-3 text-sm outline-none transition-colors ${
+                          Number(cpDiscount) > 100 ? "border-red-500 text-red-400 bg-red-500/10" : "border-white/10 focus:border-yellow-400/50"
+                        }`}
+                      />
+                      {Number(cpDiscount) > 100 && (
+                        <span className="text-[11px] text-red-400 font-bold flex items-center gap-1 mt-0.5">
+                          ⚠️ Error: Discount cannot exceed 100%
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -432,7 +465,7 @@ export default function AdminOffers() {
                   </div>
                 </div>
                 <div className="px-6 py-4 border-t border-white/10 flex gap-3">
-                  <button onClick={handleAddCoupon} disabled={savingCoupon} className="flex-1 h-11 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-black font-black uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer">
+                  <button onClick={handleAddCoupon} disabled={savingCoupon || Number(cpDiscount) > 100} className="flex-1 h-11 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-black font-black uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer">
                     <Check size={15} /> {savingCoupon ? "Saving..." : "Add Coupon"}
                   </button>
                   <button onClick={() => setShowAddCoupon(false)} className="px-6 h-11 bg-white/5 hover:bg-white/10 text-white font-bold uppercase text-xs rounded-xl border border-white/5 cursor-pointer">Cancel</button>
@@ -462,7 +495,21 @@ export default function AdminOffers() {
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs text-white/50 uppercase tracking-wider font-bold">Discount %</label>
-                      <input value={editingCoupon.discount} onChange={e => setEditingCoupon({...editingCoupon, discount: Number(e.target.value)})} type="number" min="1" max="100" className="h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-sm outline-none focus:border-yellow-400/50 transition-colors" />
+                      <input
+                        value={editingCoupon.discount}
+                        onChange={e => setEditingCoupon({...editingCoupon, discount: Number(e.target.value)})}
+                        type="number"
+                        min="1"
+                        max="100"
+                        className={`h-10 bg-white/5 border rounded-xl px-3 text-sm outline-none transition-colors ${
+                          Number(editingCoupon.discount) > 100 ? "border-red-500 text-red-400 bg-red-500/10" : "border-white/10 focus:border-yellow-400/50"
+                        }`}
+                      />
+                      {Number(editingCoupon.discount) > 100 && (
+                        <span className="text-[11px] text-red-400 font-bold flex items-center gap-1 mt-0.5">
+                          ⚠️ Error: Discount cannot exceed 100%
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -488,7 +535,7 @@ export default function AdminOffers() {
                   </div>
                 </div>
                 <div className="px-6 py-4 border-t border-white/10 flex gap-3">
-                  <button onClick={handleUpdateCoupon} className="flex-1 h-11 bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer">
+                  <button onClick={handleUpdateCoupon} disabled={Number(editingCoupon.discount) > 100} className="flex-1 h-11 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer">
                     <Check size={15} /> Save Changes
                   </button>
                   <button onClick={() => setEditingCoupon(null)} className="px-6 h-11 bg-white/5 hover:bg-white/10 text-white font-bold uppercase text-xs rounded-xl border border-white/5 cursor-pointer">Cancel</button>
