@@ -97,6 +97,48 @@ export default function AdminOffers() {
   const [ctaText, setCtaText] = useState("");
   const [whatsappMessage, setWhatsappMessage] = useState("");
   const [couponCode, setCouponCode] = useState("");
+  const [offerCoupons, setOfferCoupons] = useState<string[]>([]);
+  const [inputCoupon, setInputCoupon] = useState("");
+
+  // Edit Offer Coupon states
+  const [editOfferCoupons, setEditOfferCoupons] = useState<string[]>([]);
+  const [editInputCoupon, setEditInputCoupon] = useState("");
+
+  const startEditOffer = (offer: Offer) => {
+    setEditingOffer(offer);
+    const existing = offer.couponCodes && offer.couponCodes.length > 0
+      ? offer.couponCodes
+      : (offer.couponCode ? offer.couponCode.split(",").map(c => c.trim().toUpperCase()).filter(Boolean) : []);
+    setEditOfferCoupons(existing);
+    setEditInputCoupon("");
+    setEditImageError(false);
+  };
+
+  const addCouponToOffer = () => {
+    const code = inputCoupon.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) return;
+    if (!offerCoupons.includes(code)) {
+      setOfferCoupons([...offerCoupons, code]);
+    }
+    setInputCoupon("");
+  };
+
+  const removeCouponFromOffer = (code: string) => {
+    setOfferCoupons(offerCoupons.filter((c) => c !== code));
+  };
+
+  const addCouponToEdit = () => {
+    const code = editInputCoupon.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) return;
+    if (!editOfferCoupons.includes(code)) {
+      setEditOfferCoupons([...editOfferCoupons, code]);
+    }
+    setEditInputCoupon("");
+  };
+
+  const removeCouponFromEdit = (code: string) => {
+    setEditOfferCoupons(editOfferCoupons.filter((c) => c !== code));
+  };
   const [offerStatus, setOfferStatus] = useState<"active" | "upcoming" | "expired">("active");
   const [image, setImage] = useState("");
   const [imageError, setImageError] = useState(false);
@@ -140,30 +182,38 @@ export default function AdminOffers() {
     setCtaText("");
     setWhatsappMessage("");
     setCouponCode("");
+    setOfferCoupons([]);
+    setInputCoupon("");
     setOfferStatus("active");
     setImage("");
     setIsFeatured(true);
     setShowInPopup(true);
   };
 
-
-
   const handleAdd = () => {
     if (!title.trim() || !description.trim()) { alert("Title and Description are required"); return; }
-    const cleanCoupon = couponCode.trim().toUpperCase();
+    const allCoupons = [...offerCoupons];
+    if (inputCoupon.trim()) {
+      const extra = inputCoupon.trim().toUpperCase().replace(/\s+/g, "");
+      if (extra && !allCoupons.includes(extra)) allCoupons.push(extra);
+    }
     const cleanImg = normalizeImageUrl(image);
+    const joinedCoupons = allCoupons.join(", ");
     addOffer({
       title: title.trim(), subtitle: subtitle.trim(), description: description.trim(),
       discount: discount.trim() || "SPECIAL OFFER", badge: badge.trim() || "Limited Time",
       validTill: validTill.trim() || "Limited Slots", ctaText: ctaText.trim() || "Claim Offer",
       whatsappMessage: whatsappMessage.trim() || `Hi Muscle Empire! I would like to claim the ${title}.`,
-      isFeatured, showInPopup, image: cleanImg, couponCode: cleanCoupon || undefined, status: offerStatus,
+      isFeatured, showInPopup, image: cleanImg,
+      couponCode: joinedCoupons || undefined,
+      couponCodes: allCoupons,
+      status: offerStatus,
     });
-    if (cleanCoupon) {
-      const discNum = parseDiscountPercent(discount, cleanCoupon);
-      ensureCouponExists(cleanCoupon, discNum, `${title} Offer Coupon`);
-      setCoupons(getCoupons());
+    for (const code of allCoupons) {
+      const discNum = parseDiscountPercent(discount, code);
+      ensureCouponExists(code, discNum, `${title} Offer Coupon (${code})`);
     }
+    setCoupons(getCoupons());
     setOffers(getOffers());
     resetForm();
     setShowAdd(false);
@@ -171,18 +221,24 @@ export default function AdminOffers() {
 
   const handleUpdate = () => {
     if (!editingOffer) return;
-    const cleanCoupon = (editingOffer.couponCode || "").trim().toUpperCase();
+    const allCoupons = [...editOfferCoupons];
+    if (editInputCoupon.trim()) {
+      const extra = editInputCoupon.trim().toUpperCase().replace(/\s+/g, "");
+      if (extra && !allCoupons.includes(extra)) allCoupons.push(extra);
+    }
     const cleanImg = normalizeImageUrl(editingOffer.image);
+    const joinedCoupons = allCoupons.join(", ");
     const updatedOffer: Offer = {
       ...editingOffer,
       image: cleanImg,
-      couponCode: cleanCoupon || undefined,
+      couponCode: joinedCoupons || undefined,
+      couponCodes: allCoupons,
     };
-    if (cleanCoupon) {
-      const discNum = parseDiscountPercent(editingOffer.discount, cleanCoupon);
-      ensureCouponExists(cleanCoupon, discNum, `${editingOffer.title} Offer Coupon`);
-      setCoupons(getCoupons());
+    for (const code of allCoupons) {
+      const discNum = parseDiscountPercent(editingOffer.discount, code);
+      ensureCouponExists(code, discNum, `${editingOffer.title} Offer Coupon (${code})`);
     }
+    setCoupons(getCoupons());
     updateOffer(editingOffer.id, updatedOffer);
     setOffers(getOffers());
     setEditingOffer(null);
@@ -310,16 +366,22 @@ export default function AdminOffers() {
                       <div className="flex flex-col gap-1.5 pt-1">
                         <p className="text-[11px] text-white/45">Valid till: <strong className="text-white/80">{formatOfferDateTime(offer.validTill)}</strong></p>
                         {offer.couponCode ? (
-                          <div className="flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg w-fit">
-                            <Ticket size={12} />
-                            Coupon: {offer.couponCode}
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-400 font-mono font-bold">
+                            {(offer.couponCodes && offer.couponCodes.length > 0
+                              ? offer.couponCodes
+                              : offer.couponCode.split(",").map(c => c.trim()).filter(Boolean)
+                            ).map((code) => (
+                              <span key={code} className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg text-xs">
+                                <Ticket size={11} /> {code}
+                              </span>
+                            ))}
                           </div>
                         ) : (
                           <div className="text-[11px] text-white/30 italic">No coupon code attached</div>
                         )}
                       </div>
                       <div className="flex gap-2.5 pt-3 border-t border-white/10">
-                        <button onClick={() => setEditingOffer(offer)} className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer border border-white/5">
+                        <button onClick={() => startEditOffer(offer)} className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer border border-white/5">
                           <Edit size={13} /> Edit
                         </button>
                         <button onClick={() => handleRemove(offer.id)} className="h-9 w-9 flex items-center justify-center bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-colors border border-red-500/15 cursor-pointer" title="Delete Offer">
@@ -617,23 +679,39 @@ export default function AdminOffers() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
                     <label className="text-xs text-amber-400 uppercase tracking-wider font-bold flex items-center justify-between">
                       <span className="flex items-center gap-1.5"><Ticket size={14} /> Coupon Code for this Offer</span>
-                      {couponCode && <span className="text-[10px] text-green-400 font-mono">Selected: {couponCode}</span>}
+                      {offerCoupons.length > 0 && (
+                        <span className="text-[10px] text-green-400 font-mono">
+                          Selected ({offerCoupons.length}): {offerCoupons.join(", ")}
+                        </span>
+                      )}
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
-                        value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s+/g, ""))}
-                        placeholder="Type coupon code (e.g. DIWALI50, SAVE25) or pick below"
+                        value={inputCoupon}
+                        onChange={(e) => setInputCoupon(e.target.value.toUpperCase().replace(/\s+/g, ""))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCouponToOffer();
+                          }
+                        }}
+                        placeholder="Type coupon code (e.g. DIWALI20)"
                         className="flex-1 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
                       />
                       {coupons.filter(c => c.enabled).length > 0 && (
                         <select
                           value=""
-                          onChange={(e) => { if (e.target.value) setCouponCode(e.target.value); }}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const code = e.target.value.trim().toUpperCase();
+                              if (!offerCoupons.includes(code)) setOfferCoupons([...offerCoupons, code]);
+                              e.target.value = "";
+                            }
+                          }}
                           className="h-10 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
                         >
                           <option value="">Pick Existing...</option>
@@ -642,9 +720,48 @@ export default function AdminOffers() {
                           ))}
                         </select>
                       )}
+                      <button
+                        type="button"
+                        onClick={addCouponToOffer}
+                        className="h-10 px-3.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                      >
+                        <Plus size={14} /> Add Coupon
+                      </button>
                     </div>
+
+                    {/* Added Coupons List */}
+                    {offerCoupons.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1 border-t border-amber-500/20">
+                        {offerCoupons.map((code) => {
+                          const cp = coupons.find(c => c.code.toUpperCase() === code);
+                          return (
+                            <span
+                              key={code}
+                              className="inline-flex items-center gap-1.5 bg-black/60 border border-amber-500/50 text-amber-300 font-mono text-xs px-2.5 py-1 rounded-lg"
+                            >
+                              <Ticket size={12} className="text-amber-400" />
+                              <span className="font-bold">{code}</span>
+                              {cp && (
+                                <span className="text-[10px] text-white/50">
+                                  ({cp.discount}% {cp.plans?.length ? `· ${cp.plans.join("/")}` : ""})
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeCouponFromOffer(code)}
+                                className="text-white/40 hover:text-red-400 transition-colors ml-1 cursor-pointer"
+                                title="Remove coupon"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     <p className="text-[10px] text-amber-300/70">
-                      Type any coupon code or choose an existing one. If you type a new code, it will be automatically created and activated!
+                      Type any coupon code or choose an existing one and click "Add Coupon". You can add multiple coupons to offer different plan discounts under one offer banner!
                     </p>
                   </div>
 
@@ -775,23 +892,39 @@ export default function AdminOffers() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
                     <label className="text-xs text-amber-400 uppercase tracking-wider font-bold flex items-center justify-between">
                       <span className="flex items-center gap-1.5"><Ticket size={14} /> Coupon Code for this Offer</span>
-                      {editingOffer.couponCode && <span className="text-[10px] text-green-400 font-mono">Selected: {editingOffer.couponCode}</span>}
+                      {editOfferCoupons.length > 0 && (
+                        <span className="text-[10px] text-green-400 font-mono">
+                          Selected ({editOfferCoupons.length}): {editOfferCoupons.join(", ")}
+                        </span>
+                      )}
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
-                        value={editingOffer.couponCode || ""}
-                        onChange={(e) => setEditingOffer({ ...editingOffer, couponCode: e.target.value.toUpperCase().replace(/\s+/g, "") })}
-                        placeholder="Type coupon code (e.g. DIWALI50, SAVE25) or pick below"
+                        value={editInputCoupon}
+                        onChange={(e) => setEditInputCoupon(e.target.value.toUpperCase().replace(/\s+/g, ""))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCouponToEdit();
+                          }
+                        }}
+                        placeholder="Type coupon code (e.g. DIWALI20)"
                         className="flex-1 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
                       />
                       {coupons.filter(c => c.enabled).length > 0 && (
                         <select
                           value=""
-                          onChange={(e) => { if (e.target.value) setEditingOffer({ ...editingOffer, couponCode: e.target.value }); }}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const code = e.target.value.trim().toUpperCase();
+                              if (!editOfferCoupons.includes(code)) setEditOfferCoupons([...editOfferCoupons, code]);
+                              e.target.value = "";
+                            }
+                          }}
                           className="h-10 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
                         >
                           <option value="">Pick Existing...</option>
@@ -800,9 +933,48 @@ export default function AdminOffers() {
                           ))}
                         </select>
                       )}
+                      <button
+                        type="button"
+                        onClick={addCouponToEdit}
+                        className="h-10 px-3.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                      >
+                        <Plus size={14} /> Add Coupon
+                      </button>
                     </div>
+
+                    {/* Added Coupons List for Edit */}
+                    {editOfferCoupons.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1 border-t border-amber-500/20">
+                        {editOfferCoupons.map((code) => {
+                          const cp = coupons.find(c => c.code.toUpperCase() === code);
+                          return (
+                            <span
+                              key={code}
+                              className="inline-flex items-center gap-1.5 bg-black/60 border border-amber-500/50 text-amber-300 font-mono text-xs px-2.5 py-1 rounded-lg"
+                            >
+                              <Ticket size={12} className="text-amber-400" />
+                              <span className="font-bold">{code}</span>
+                              {cp && (
+                                <span className="text-[10px] text-white/50">
+                                  ({cp.discount}% {cp.plans?.length ? `· ${cp.plans.join("/")}` : ""})
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeCouponFromEdit(code)}
+                                className="text-white/40 hover:text-red-400 transition-colors ml-1 cursor-pointer"
+                                title="Remove coupon"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     <p className="text-[10px] text-amber-300/70">
-                      Type any coupon code or choose an existing one. If you type a new code, it will be automatically created and activated!
+                      Type any coupon code or choose an existing one and click "Add Coupon". You can add multiple coupons to offer different plan discounts under one offer banner!
                     </p>
                   </div>
 

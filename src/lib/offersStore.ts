@@ -92,6 +92,10 @@ export function normalizeImageUrl(url?: string): string {
 }
 
 function mapRowToOffer(row: any): Offer {
+  const codes = row.coupon_code
+    ? String(row.coupon_code).split(",").map((c: string) => c.trim().toUpperCase()).filter(Boolean)
+    : [];
+
   return {
     id: String(row.id),
     title: String(row.title || "").trim(),
@@ -103,6 +107,7 @@ function mapRowToOffer(row: any): Offer {
     ctaText: String(row.cta_text || "Claim Offer"),
     whatsappMessage: String(row.whatsapp_message || ""),
     couponCode: row.coupon_code ? String(row.coupon_code).trim().toUpperCase() : undefined,
+    couponCodes: codes,
     status: (row.status || "active") as "active" | "upcoming" | "expired",
     image: normalizeImageUrl(row.image),
     isFeatured: row.is_featured !== false,
@@ -111,6 +116,10 @@ function mapRowToOffer(row: any): Offer {
 }
 
 function mapOfferToRow(offer: Offer | Omit<Offer, "id">, id?: string): any {
+  const codeStr = (offer.couponCodes && offer.couponCodes.length > 0)
+    ? offer.couponCodes.map(c => c.trim().toUpperCase()).filter(Boolean).join(", ")
+    : (offer.couponCode ? offer.couponCode.trim().toUpperCase() : "");
+
   return {
     id: id || (offer as any).id,
     title: offer.title.trim(),
@@ -121,7 +130,7 @@ function mapOfferToRow(offer: Offer | Omit<Offer, "id">, id?: string): any {
     valid_till: offer.validTill || "",
     cta_text: offer.ctaText || "Claim Offer",
     whatsapp_message: offer.whatsappMessage || "",
-    coupon_code: offer.couponCode ? offer.couponCode.trim().toUpperCase() : "",
+    coupon_code: codeStr,
     status: offer.status || "active",
     image: normalizeImageUrl(offer.image),
     is_featured: offer.isFeatured !== false,

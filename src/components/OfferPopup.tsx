@@ -184,10 +184,12 @@ export default function OfferPopup() {
                       {currentOffer.title}
                     </h2>
 
-                    {/* Description */}
-                    <p className="text-gray-500 text-sm leading-relaxed mb-4">
-                      {currentOffer.description}
-                    </p>
+                    {/* Subtitle (description only appears on Claim Offer modal) */}
+                    {currentOffer.subtitle && (
+                      <p className="text-gray-500 text-sm leading-relaxed mb-4">
+                        {currentOffer.subtitle}
+                      </p>
+                    )}
 
                     {/* Valid until */}
                     <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">

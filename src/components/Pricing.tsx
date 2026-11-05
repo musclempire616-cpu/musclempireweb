@@ -337,19 +337,6 @@ export default function Pricing() {
   const [modalGym, setModalGym] = useState<{gym: typeof gyms[0], planType: PlanType} | null>(null);
   const [ptModalOpen, setPtModalOpen] = useState(false);
 
-  // Auto-open pricing modal if user claimed a coupon offer
-  useEffect(() => {
-    const handleAutoClaim = () => {
-      const code = sessionStorage.getItem("auto_apply_coupon") || localStorage.getItem("auto_apply_coupon");
-      if (code) {
-        setModalGym({ gym: gyms[0], planType: "gym" });
-      }
-    };
-
-    handleAutoClaim();
-    window.addEventListener("autoClaimOffer", handleAutoClaim);
-    return () => window.removeEventListener("autoClaimOffer", handleAutoClaim);
-  }, []);
 
   // Coupon states for Dietitian and PT cards
   const [dietCoupon, setDietCoupon] = useState("");

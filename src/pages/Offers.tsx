@@ -11,6 +11,7 @@ import chalkboardBg from "@/assets/images/chalkboard-bg.webp";
 
 type Offer = {
   title: string;
+  subtitle?: string;
   description: string;
   discount?: string;
   validTill?: string;
@@ -20,6 +21,7 @@ type Offer = {
   image?: string;
   whatsappMessage?: string;
   couponCode?: string;
+  couponCodes?: string[];
 };
 
 function OfferCard({
@@ -85,9 +87,11 @@ function OfferCard({
         <h3 className="text-gray-900 font-black uppercase tracking-tight text-lg leading-tight">
           {offer.title}
         </h3>
-        <p className="text-gray-500 text-sm leading-relaxed flex-1">
-          {upcoming ? offer.teaser : offer.description}
-        </p>
+        {(upcoming ? offer.teaser : offer.subtitle) && (
+          <p className="text-gray-500 text-sm leading-relaxed flex-1">
+            {upcoming ? offer.teaser : offer.subtitle}
+          </p>
+        )}
 
         {/* Meta */}
         <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -159,20 +163,20 @@ export default function Offers() {
     const fetchOffers = () => {
       const all = getOffers();
       setOngoingOffers(all.filter(o => o.status === "active").map(o => ({
-        title: o.title, description: o.description, discount: o.discount,
+        title: o.title, subtitle: o.subtitle, description: o.description, discount: o.discount,
         validTill: o.validTill, cta: o.ctaText, whatsappMessage: o.whatsappMessage,
-        image: normalizeImageUrl(o.image), couponCode: o.couponCode,
+        image: normalizeImageUrl(o.image), couponCode: o.couponCode, couponCodes: o.couponCodes,
       })));
       setUpcomingDynamicOffers(all.filter(o => o.status === "upcoming").map(o => ({
-        title: o.title, description: o.description, discount: o.discount,
-        validTill: o.validTill, launchDate: o.validTill, teaser: o.description,
+        title: o.title, subtitle: o.subtitle, description: o.description, discount: o.discount,
+        validTill: o.validTill, launchDate: o.validTill, teaser: o.subtitle || o.description,
         cta: o.ctaText, whatsappMessage: o.whatsappMessage,
-        image: normalizeImageUrl(o.image), couponCode: o.couponCode,
+        image: normalizeImageUrl(o.image), couponCode: o.couponCode, couponCodes: o.couponCodes,
       })));
       setExpiredOffers(all.filter(o => o.status === "expired").map(o => ({
-        title: o.title, description: o.description, discount: o.discount,
+        title: o.title, subtitle: o.subtitle, description: o.description, discount: o.discount,
         validTill: o.validTill, cta: o.ctaText, whatsappMessage: o.whatsappMessage,
-        image: normalizeImageUrl(o.image), couponCode: o.couponCode,
+        image: normalizeImageUrl(o.image), couponCode: o.couponCode, couponCodes: o.couponCodes,
       })));
     };
     fetchOffers();

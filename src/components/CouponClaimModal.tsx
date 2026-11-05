@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Sparkles, Copy, Check, ArrowRight, MessageSquare, Tag, CheckCircle2 } from "lucide-react";
+import { X, Sparkles, Copy, Check, ArrowRight, MessageSquare, Tag, Ticket, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import { ensureCouponExists, parseDiscountPercent } from "@/lib/couponStore";
 
@@ -8,6 +8,7 @@ export interface OfferClaimData {
   title: string;
   discount?: string;
   couponCode?: string;
+  couponCodes?: string[];
   description?: string;
   whatsappMessage?: string;
 }
@@ -21,33 +22,39 @@ interface CouponClaimModalProps {
 const OWNER_PHONE = "918779682084";
 
 export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaimModalProps) {
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [, navigate] = useLocation();
 
-  // If offer has an assigned coupon code, use it. Otherwise create a smart fallback so it's never blank.
-  const rawCode = offer?.couponCode?.trim().toUpperCase() || "";
+  // Extract all coupon codes from offer
+  const rawCodes = offer?.couponCodes && offer.couponCodes.length > 0
+    ? offer.couponCodes
+    : (offer?.couponCode ? offer.couponCode.split(",").map(c => c.trim().toUpperCase()).filter(Boolean) : []);
+
   const fallbackCode = offer?.title
     ? `${offer.title.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()}${parseInt((offer.discount || "").replace(/\D/g, ""), 10) || 20}`
     : "EMPIRE25";
-  const couponCode = rawCode || fallbackCode;
+
+  const couponCodesList = rawCodes.length > 0 ? rawCodes : [fallbackCode];
 
   useEffect(() => {
-    if (isOpen && offer && couponCode) {
-      const discNum = parseDiscountPercent(offer.discount, couponCode);
-      ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
+    if (isOpen && offer && couponCodesList.length > 0) {
+      couponCodesList.forEach((code) => {
+        const discNum = parseDiscountPercent(offer.discount, code);
+        ensureCouponExists(code, discNum, `${offer.title} Coupon (${code})`);
+      });
     }
-  }, [isOpen, offer, couponCode]);
+  }, [isOpen, offer]);
 
   if (!isOpen || !offer) return null;
 
-  const handleCopyCode = () => {
-    if (!couponCode) return;
-    const discNum = parseDiscountPercent(offer.discount, couponCode);
-    ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
+  const handleCopyCode = (code: string) => {
+    if (!code) return;
+    const discNum = parseDiscountPercent(offer.discount, code);
+    ensureCouponExists(code, discNum, `${offer.title} Coupon (${code})`);
 
     // Cross-browser copy
     const el = document.createElement("textarea");
-    el.value = couponCode;
+    el.value = code;
     el.setAttribute("readonly", "");
     el.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none;";
     document.body.appendChild(el);
@@ -60,19 +67,23 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
     document.body.removeChild(el);
 
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(couponCode).catch(() => {});
+      navigator.clipboard.writeText(code).catch(() => {});
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2200);
+    setCopiedCode(code);
+    setTimeout(() => {
+      setCopiedCode(prev => (prev === code ? null : prev));
+    }, 2200);
   };
 
   const handleGoToPricing = () => {
-    const discNum = parseDiscountPercent(offer.discount, couponCode);
-    ensureCouponExists(couponCode, discNum, `${offer.title} Coupon`);
+    // If the user already copied a specific code, auto-apply that one; otherwise use the first coupon
+    const primaryCode = copiedCode || couponCodesList[0];
+    const discNum = parseDiscountPercent(offer.discount, primaryCode);
+    ensureCouponExists(primaryCode, discNum, `${offer.title} Coupon`);
 
     // Store in both session & local storage so it survives cross-page routing
-    sessionStorage.setItem("auto_apply_coupon", couponCode);
-    localStorage.setItem("auto_apply_coupon", couponCode);
+    sessionStorage.setItem("auto_apply_coupon", primaryCode);
+    localStorage.setItem("auto_apply_coupon", primaryCode);
     sessionStorage.setItem("scroll_to_hash", "#pricing");
 
     // Clear stale scroll positions so Home scrolls directly to pricing
@@ -89,7 +100,6 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
           const top = el.getBoundingClientRect().top + window.scrollY - 76;
           window.scrollTo({ top, behavior: "smooth" });
         }
-        window.dispatchEvent(new CustomEvent("autoClaimOffer", { detail: { couponCode } }));
       } else {
         navigate("/#pricing");
       }
@@ -97,9 +107,10 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
   };
 
   const handleClaimWhatsApp = () => {
+    const codesStr = couponCodesList.join(", ");
     const text = encodeURIComponent(
       offer.whatsappMessage ||
-        `Hi Muscle Empire! I would like to claim the ${offer.title} offer using Coupon Code ${couponCode}.`
+        `Hi Muscle Empire! I would like to claim the ${offer.title} offer using Coupon Code ${codesStr}.`
     );
     window.open(`https://wa.me/${OWNER_PHONE}?text=${text}`, "_blank");
     onClose();
@@ -123,25 +134,25 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.92, y: 16 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl z-10 overflow-hidden text-gray-900 border border-gray-100"
+          className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl z-10 overflow-hidden text-gray-900 border border-gray-100"
         >
           {/* Top Decorative Gradient */}
-          <div className="h-2 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-500" />
+          <div className="h-2 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 shrink-0" />
 
-          <div className="p-6 sm:p-8">
+          <div className="p-6 sm:p-7 overflow-y-auto">
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-900 flex items-center justify-center transition-colors cursor-pointer"
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-900 flex items-center justify-center transition-colors cursor-pointer z-10"
               aria-label="Close modal"
             >
               <X size={16} />
             </button>
 
             {/* Header */}
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                <Sparkles size={24} className="text-amber-600" />
+            <div className="flex items-start gap-3.5 mb-5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                <Sparkles size={22} className="text-amber-600" />
               </div>
               <div className="pr-6">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -152,92 +163,70 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
                     <Tag size={12} /> Claim Offer
                   </span>
                 </div>
-                <h3 className="text-xl font-black uppercase tracking-tight text-gray-900 leading-tight">
+                <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-gray-900 leading-tight">
                   {offer.title}
                 </h3>
               </div>
             </div>
 
-            {/* Coupon Code Box */}
-            <div className="mb-6 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/10 border-2 border-dashed border-amber-500/30 rounded-2xl p-4 sm:p-5 text-center relative overflow-hidden">
-              <p className="text-xs font-bold text-amber-900/70 uppercase tracking-widest mb-1.5">
-                Your Exclusive Coupon Code
-              </p>
-              <div className="flex items-center justify-center gap-3">
-                <span className="font-mono text-2xl sm:text-3xl font-black tracking-wider text-gray-900 select-all">
-                  {couponCode}
-                </span>
-                <button
-                  onClick={handleCopyCode}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
-                    copied
-                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
-                      : "bg-gray-900 hover:bg-gray-800 text-white shadow-md shadow-gray-900/20"
-                  }`}
-                >
-                  {copied ? (
-                    <>
-                      <Check size={14} /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={14} /> Copy Code
-                    </>
-                  )}
-                </button>
-              </div>
+            {/* Coupon Codes List (one below other, compact size, no exclusive text) */}
+            <div className="mb-4 space-y-2 max-h-56 overflow-y-auto pr-0.5">
+              {couponCodesList.map((code) => {
+                const isCopied = copiedCode === code;
+                return (
+                  <div
+                    key={code}
+                    className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 border-2 border-dashed border-amber-500/35 rounded-xl px-3.5 py-2 flex items-center justify-between gap-3 transition-colors hover:border-amber-500/60"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Ticket size={15} className="text-amber-600 shrink-0" />
+                      <span className="font-mono text-base sm:text-lg font-black tracking-wider text-gray-900 select-all truncate">
+                        {code}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(code)}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
+                        isCopied
+                          ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                          : "bg-gray-900 hover:bg-gray-800 text-white shadow-sm shadow-gray-900/20"
+                      }`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check size={12} /> Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} /> Copy Code
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Instructions */}
-            <div className="mb-6">
-              <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">
-                How to Claim & Apply Coupon
-              </h4>
-              <div className="space-y-3 text-xs text-gray-600">
-                <div className="flex items-start gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                  <div className="w-5 h-5 rounded-full bg-gray-900 text-white font-black flex items-center justify-center shrink-0 text-[10px]">
-                    1
-                  </div>
-                  <p>
-                    Click <strong className="text-gray-900">Copy Code</strong> above to save coupon{" "}
-                    <code className="font-mono text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-bold">
-                      {couponCode}
-                    </code>.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                  <div className="w-5 h-5 rounded-full bg-gray-900 text-white font-black flex items-center justify-center shrink-0 text-[10px]">
-                    2
-                  </div>
-                  <p>
-                    Go to <strong className="text-gray-900">Pricing & Membership Plans</strong> section.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                  <div className="w-5 h-5 rounded-full bg-gray-900 text-white font-black flex items-center justify-center shrink-0 text-[10px]">
-                    3
-                  </div>
-                  <p>
-                    Click <strong className="text-gray-900">"Have a coupon code?"</strong> and paste your code.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-3 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
-                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-                  <p className="text-emerald-900 font-medium">
-                    Your discount applies instantly before checkout!
-                  </p>
-                </div>
+            {/* Offer Description (replaces former steps) */}
+            {offer.description && (
+              <div className="mb-5 bg-amber-50/50 border border-amber-200/60 rounded-2xl p-4">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-amber-800/80 mb-1.5 flex items-center gap-1.5">
+                  <Info size={13} className="text-amber-600 shrink-0" />
+                  Offer Details
+                </h4>
+                <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line font-medium">
+                  {offer.description}
+                </p>
               </div>
-            </div>
+            )}
 
-            {/* Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
               <button
                 onClick={handleGoToPricing}
-                className="w-full sm:flex-1 h-14 bg-amber-500 hover:bg-amber-600 text-black font-black uppercase tracking-wider text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2.5 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+                className="w-full sm:flex-1 h-12 bg-amber-500 hover:bg-amber-600 text-black font-black uppercase tracking-wider text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
               >
                 Go to Pricing & Apply
                 <ArrowRight size={14} />
@@ -245,7 +234,7 @@ export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaim
 
               <button
                 onClick={handleClaimWhatsApp}
-                className="w-full sm:w-auto h-14 px-6 bg-gray-900 hover:bg-gray-800 text-white font-black uppercase tracking-wider text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2.5 transition-colors cursor-pointer"
+                className="w-full sm:w-auto h-12 px-5 bg-gray-900 hover:bg-gray-800 text-white font-black uppercase tracking-wider text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <MessageSquare size={14} />
                 Claim via WhatsApp

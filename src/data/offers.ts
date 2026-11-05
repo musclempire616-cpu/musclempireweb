@@ -12,6 +12,7 @@ export interface Offer {
   showInPopup?: boolean;
   image?: string;
   couponCode?: string;
+  couponCodes?: string[];
   status?: "active" | "upcoming" | "expired";
 }
 
