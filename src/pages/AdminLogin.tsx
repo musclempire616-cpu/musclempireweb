@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { login, changePassword } from "@/lib/adminAuth";
+import { login, changePassword, hasValidSession } from "@/lib/adminAuth";
 import { Lock, Eye, EyeOff, KeyRound } from "lucide-react";
 
 export default function AdminLogin() {
@@ -18,6 +18,12 @@ export default function AdminLogin() {
   const [showNew, setShowNew] = useState(false);
   const [changeMsg, setChangeMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [changing, setChanging] = useState(false);
+
+  useEffect(() => {
+    hasValidSession().then((valid) => {
+      if (valid) navigate("/sagarkharat/dashboard");
+    });
+  }, [navigate]);
 
   const inputCls = "w-full bg-[#0d1117] border border-white/10 focus:border-green-400 focus:outline-none h-11 px-3 text-white placeholder:text-white/20 text-sm rounded-lg transition-colors";
 
