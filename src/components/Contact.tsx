@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Phone, MapPin, Mail, CheckCircle2, Clock, User, Building2, FileText } from "lucide-react";
 
 
-const OWNER_PHONE = "919137870108";
+const OWNER_PHONE = "918779682084";
 
 export default function Contact() {
   const [submitted, setSubmitted] = useState(false);

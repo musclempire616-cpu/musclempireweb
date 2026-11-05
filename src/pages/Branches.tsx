@@ -26,7 +26,7 @@ import PlanNavbar from "@/components/PlanNavbar";
 import Footer from "@/components/Footer";
 
 
-const OWNER_PHONE = "919137870108";
+const OWNER_PHONE = "918779682084";
 
 type BranchType = "all" | "unisex" | "female";
 

@@ -23,7 +23,7 @@ import type { AssessmentData } from "@/lib/sheets";
 import { RAZORPAY_KEY } from "@/lib/razorpay";
 import { validateCoupon } from "@/lib/couponStore";
 
-const WA_NUMBER = "919137870108";
+const WA_NUMBER = "918779682084";
 
 const blockNonNumericKeys = (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (

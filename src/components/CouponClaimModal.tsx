@@ -18,7 +18,7 @@ interface CouponClaimModalProps {
   offer: OfferClaimData | null;
 }
 
-const OWNER_PHONE = "919137870108";
+const OWNER_PHONE = "918779682084";
 
 export default function CouponClaimModal({ isOpen, onClose, offer }: CouponClaimModalProps) {
   const [copied, setCopied] = useState(false);

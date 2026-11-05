@@ -6,7 +6,7 @@ import { getOffers, pullOffersFromSheets, formatOfferDateTime } from "@/lib/offe
 import type { Offer } from "@/data/offers";
 import CouponClaimModal from "@/components/CouponClaimModal";
 
-const OWNER_PHONE = "919137870108";
+const OWNER_PHONE = "918779682084";
 
 const slideVariants = {
   enter: (direction: number) => ({

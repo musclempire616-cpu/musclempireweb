@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 const DEMO_MSG = encodeURIComponent(
   "Hi! I'd like to book a FREE demo session at Muscle Empire Gymnasium. Please share the available slots."
 );
-const DEMO_LINK = `https://wa.me/919137870108?text=${DEMO_MSG}`;
+const DEMO_LINK = `https://wa.me/918779682084?text=${DEMO_MSG}`;
 
 export default function DemoBar() {
   const [menuOpen, setMenuOpen] = useState(false);

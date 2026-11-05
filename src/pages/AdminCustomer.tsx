@@ -276,7 +276,7 @@ export default function AdminCustomer({ params }: { params: { id: string } }) {
     doc.setFontSize(9.5);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text("Office : - 9137870108  |  Sagar Kharat : -  9773053632  |  8779682084  |  9702268603", margin + 31, y + 22);
+    doc.text("Office : - 8779682084  |  Sagar Kharat : -  9773053632  |  9702268603", margin + 31, y + 22);
 
     y += 30;
     doc.setLineWidth(0.6);
