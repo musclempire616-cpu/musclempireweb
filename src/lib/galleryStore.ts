@@ -169,7 +169,6 @@ export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
 }
 
 export function addGalleryImage(src: string, alt: string): void {
-  if (src.startsWith("data:")) throw new Error("Use a URL (imgbb.com) instead of uploading a file.");
   recordLocalEdit();
   const current = getLocalImages();
   const normSrc = src.trim().toLowerCase();
@@ -225,7 +224,6 @@ export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
 }
 
 export function addGalleryVideo(src: string, alt: string, thumbnail?: string): void {
-  if (src.startsWith("data:")) throw new Error("Use a URL instead of uploading a file.");
   recordLocalEdit();
   const current = getLocalVideos();
   const normSrc = src.trim().toLowerCase();

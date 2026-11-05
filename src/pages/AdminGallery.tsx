@@ -1,36 +1,58 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { 
   getGalleryImages, addGalleryImage, removeGalleryImage, syncImagesFromSheets, type GalleryImage,
   getGalleryVideos, addGalleryVideo, removeGalleryVideo, syncVideosFromSheets, type GalleryVideo 
 } from "@/lib/galleryStore";
-import { Plus, Trash2, Image as ImageIcon, Video, LogOut, Users, Tag, Play, X } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Video, LogOut, Users, Tag, Play, X, Upload, Loader2, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminGuard from "@/components/AdminGuard";
 import { logout } from "@/lib/adminAuth";
+import { supabase } from "@/lib/supabase";
+
+function getYoutubeVideoId(url: string): string | null {
+  if (!url) return null;
+  const clean = url.trim();
+  const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/;
+  const match = clean.match(regExp);
+  if (match && match[1]) return match[1];
+
+  try {
+    const parsed = new URL(clean.startsWith("http") ? clean : `https://${clean}`);
+    if (parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be")) {
+      const v = parsed.searchParams.get("v");
+      if (v && v.length === 11) return v;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const last = parts[parts.length - 1];
+      if (last && last.length === 11) return last;
+    }
+  } catch {}
+  return null;
+}
 
 function getYoutubeEmbedUrl(url: string): string | null {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11 ? `https://www.youtube.com/embed/${match[2]}?autoplay=1` : null;
+  const id = getYoutubeVideoId(url);
+  return id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` : null;
 }
 
 function getYoutubeThumbnail(url: string): string | null {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11 ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
+  const id = getYoutubeVideoId(url);
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
 function getDriveEmbedUrl(url: string): string | null {
+  if (!url) return null;
   const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   return match ? `https://drive.google.com/file/d/${match[1]}/preview` : null;
 }
 
 function getEmbedUrl(url: string): string | null {
-  return getYoutubeEmbedUrl(url);
+  if (!url) return null;
+  return getYoutubeEmbedUrl(url) || getDriveEmbedUrl(url);
 }
 
 function getThumb(url: string): string | null {
+  if (!url) return null;
   return getYoutubeThumbnail(url);
 }export default function AdminGallery() {
   const [, navigate] = useLocation();
@@ -42,7 +64,60 @@ function getThumb(url: string): string | null {
   const [newThumb, setNewThumb] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeVideo, setActiveVideo] = useState<GalleryVideo | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("gallery")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: file.type || "image/jpeg",
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: pubData } = supabase.storage.from("gallery").getPublicUrl(fileName);
+      if (pubData?.publicUrl) {
+        setNewSrc(pubData.publicUrl);
+        if (!newAlt) {
+          const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+          setNewAlt(nameWithoutExt);
+        }
+      }
+    } catch (err: any) {
+      console.error("Storage upload error:", err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setNewSrc(reader.result);
+          if (!newAlt) {
+            setNewAlt(file.name.replace(/\.[^/.]+$/, ""));
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   useEffect(() => {
     getGalleryImages().then(setImages);
@@ -59,8 +134,10 @@ function getThumb(url: string): string | null {
     if (!newSrc.trim()) return;
     if (activeTab === "photos") {
       addGalleryImage(newSrc.trim(), newAlt.trim() || "Gallery image");
+      getGalleryImages().then(setImages);
     } else {
       addGalleryVideo(newSrc.trim(), newAlt.trim() || "Gallery video", newThumb.trim() || undefined);
+      getGalleryVideos().then(setVideos);
     }
     setNewSrc("");
     setNewAlt("");
@@ -71,8 +148,10 @@ function getThumb(url: string): string | null {
   const handleRemove = (id: string) => {
     if (activeTab === "photos") {
       removeGalleryImage(id);
+      getGalleryImages().then(setImages);
     } else {
       removeGalleryVideo(id);
+      getGalleryVideos().then(setVideos);
     }
   };
 
@@ -190,27 +269,91 @@ function getThumb(url: string): string | null {
                     />
                   </div>
 
-                  {/* URL-only note */}
-                  <div className="w-full py-3 px-4 border border-green-400/20 rounded-xl bg-green-400/5">
-                    <p className="text-green-400/80 text-xs text-center leading-relaxed">
-                      📎 Use a hosted URL so images sync across all devices.<br />
-                      Upload to <strong className="text-green-400">imgbb.com</strong> → copy Direct Link → paste below.
-                    </p>
-                  </div>
+                  {/* Photo Upload Options */}
+                  {activeTab === "photos" ? (
+                    <div className="space-y-4">
+                      {/* Device File Upload */}
+                      <div>
+                        <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">
+                          Upload Photo File (from Phone / PC)
+                        </label>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                          className="w-full flex flex-col sm:flex-row items-center justify-center gap-2.5 py-4 px-4 border-2 border-dashed border-green-500/40 hover:border-green-400 rounded-xl bg-green-500/5 hover:bg-green-500/10 transition-all cursor-pointer text-center group"
+                        >
+                          {uploading ? (
+                            <>
+                              <Loader2 size={20} className="text-green-400 animate-spin" />
+                              <span className="text-xs font-bold text-green-400 uppercase tracking-wider">
+                                Uploading image to cloud storage...
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={20} className="text-green-400 group-hover:scale-110 transition-transform" />
+                              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                Choose image from device
+                              </span>
+                              <span className="text-[10px] text-white/40">
+                                (JPG, PNG, WebP up to 20MB)
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      </div>
 
-                  {/* URL input */}
-                  <div>
-                    <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">
-                      {activeTab === "photos" ? "Image URL" : "Video URL / YouTube Link / Google Drive Link"}
-                    </label>
-                    <input
-                      type="text"
-                      value={newSrc}
-                      onChange={e => setNewSrc(e.target.value)}
-                      placeholder={activeTab === "photos" ? "https://example.com/image.jpg" : "https://youtube.com/... or Google Drive link"}
-                      className="w-full bg-[#0d1117] border border-white/10 focus:border-green-400 focus:outline-none h-11 px-3 text-white placeholder:text-white/20 text-sm rounded-lg transition-colors"
-                    />
-                  </div>
+                      {/* Image Preview if uploaded */}
+                      {newSrc && (
+                        <div className="relative w-fit max-w-full rounded-xl overflow-hidden border border-white/20 bg-black/40 p-2">
+                          <img src={newSrc} alt="Preview" className="h-28 w-auto object-cover rounded-lg" />
+                          <button
+                            type="button"
+                            onClick={() => setNewSrc("")}
+                            className="absolute top-3 right-3 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition-colors cursor-pointer"
+                            title="Remove"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Or paste URL */}
+                      <div>
+                        <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">
+                          Or Paste Direct Image URL
+                        </label>
+                        <input
+                          type="text"
+                          value={newSrc}
+                          onChange={e => setNewSrc(e.target.value)}
+                          placeholder="https://example.com/image.jpg"
+                          className="w-full bg-[#0d1117] border border-white/10 focus:border-green-400 focus:outline-none h-11 px-3 text-white placeholder:text-white/20 text-sm rounded-lg transition-colors"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">
+                        Video URL / YouTube Link (Watch, Shorts, Live) / Drive Link
+                      </label>
+                      <input
+                        type="text"
+                        value={newSrc}
+                        onChange={e => setNewSrc(e.target.value)}
+                        placeholder="https://youtube.com/watch?v=... or https://youtube.com/live/..."
+                        className="w-full bg-[#0d1117] border border-white/10 focus:border-green-400 focus:outline-none h-11 px-3 text-white placeholder:text-white/20 text-sm rounded-lg transition-colors"
+                      />
+                    </div>
+                  )}
 
                   {/* Thumbnail URL — videos only */}
                   {activeTab === "videos" && (
@@ -235,7 +378,7 @@ function getThumb(url: string): string | null {
                       disabled={!newSrc.trim() || uploading}
                       className="flex-1 bg-green-500 hover:bg-green-400 disabled:opacity-40 text-black font-black uppercase tracking-widest py-2.5 rounded-lg text-xs transition-colors cursor-pointer"
                     >
-                      Add Link
+                      Add {activeTab === "photos" ? "Image" : "Video"}
                     </button>
                     <button
                       onClick={() => { setShowAdd(false); setNewSrc(""); setNewAlt(""); }}

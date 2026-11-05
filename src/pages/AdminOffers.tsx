@@ -688,45 +688,51 @@ export default function AdminOffers() {
                         </span>
                       )}
                     </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        value={inputCoupon}
-                        onChange={(e) => setInputCoupon(e.target.value.toUpperCase().replace(/\s+/g, ""))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addCouponToOffer();
-                          }
-                        }}
-                        placeholder="Type coupon code (e.g. DIWALI20)"
-                        className="flex-1 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
-                      />
-                      {coupons.filter(c => c.enabled).length > 0 && (
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const code = e.target.value.trim().toUpperCase();
-                              if (!offerCoupons.includes(code)) setOfferCoupons([...offerCoupons, code]);
-                              e.target.value = "";
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={inputCoupon}
+                          onChange={(e) => setInputCoupon(e.target.value.toUpperCase().replace(/\s+/g, ""))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCouponToOffer();
                             }
                           }}
-                          className="h-10 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
+                          placeholder="Type coupon code (e.g. DIWALI20)"
+                          className="flex-1 min-w-0 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={addCouponToOffer}
+                          className="h-10 px-4 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                         >
-                          <option value="">Pick Existing...</option>
-                          {coupons.filter(c => c.enabled).map(c => (
-                            <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
-                          ))}
-                        </select>
+                          <Plus size={14} /> Add Coupon
+                        </button>
+                      </div>
+
+                      {coupons.filter(c => c.enabled).length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider shrink-0">Or pick:</span>
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                const code = e.target.value.trim().toUpperCase();
+                                if (!offerCoupons.includes(code)) setOfferCoupons([...offerCoupons, code]);
+                                e.target.value = "";
+                              }
+                            }}
+                            className="flex-1 min-w-0 h-9 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
+                          >
+                            <option value="">Pick Existing Active Coupon...</option>
+                            {coupons.filter(c => c.enabled).map(c => (
+                              <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
+                            ))}
+                          </select>
+                        </div>
                       )}
-                      <button
-                        type="button"
-                        onClick={addCouponToOffer}
-                        className="h-10 px-3.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
-                      >
-                        <Plus size={14} /> Add Coupon
-                      </button>
                     </div>
 
                     {/* Added Coupons List */}
@@ -901,45 +907,51 @@ export default function AdminOffers() {
                         </span>
                       )}
                     </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        value={editInputCoupon}
-                        onChange={(e) => setEditInputCoupon(e.target.value.toUpperCase().replace(/\s+/g, ""))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addCouponToEdit();
-                          }
-                        }}
-                        placeholder="Type coupon code (e.g. DIWALI20)"
-                        className="flex-1 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
-                      />
-                      {coupons.filter(c => c.enabled).length > 0 && (
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const code = e.target.value.trim().toUpperCase();
-                              if (!editOfferCoupons.includes(code)) setEditOfferCoupons([...editOfferCoupons, code]);
-                              e.target.value = "";
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editInputCoupon}
+                          onChange={(e) => setEditInputCoupon(e.target.value.toUpperCase().replace(/\s+/g, ""))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCouponToEdit();
                             }
                           }}
-                          className="h-10 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
+                          placeholder="Type coupon code (e.g. DIWALI20)"
+                          className="flex-1 min-w-0 h-10 bg-black/40 border border-amber-500/40 text-amber-300 rounded-xl px-3 text-sm font-mono tracking-widest font-black uppercase outline-none focus:border-amber-400 transition-colors placeholder:text-white/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={addCouponToEdit}
+                          className="h-10 px-4 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                         >
-                          <option value="">Pick Existing...</option>
-                          {coupons.filter(c => c.enabled).map(c => (
-                            <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
-                          ))}
-                        </select>
+                          <Plus size={14} /> Add Coupon
+                        </button>
+                      </div>
+
+                      {coupons.filter(c => c.enabled).length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider shrink-0">Or pick:</span>
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                const code = e.target.value.trim().toUpperCase();
+                                if (!editOfferCoupons.includes(code)) setEditOfferCoupons([...editOfferCoupons, code]);
+                                e.target.value = "";
+                              }
+                            }}
+                            className="flex-1 min-w-0 h-9 bg-[#161b22] border border-amber-500/40 text-amber-300 rounded-xl px-3 text-xs font-bold uppercase outline-none focus:border-amber-400 cursor-pointer"
+                          >
+                            <option value="">Pick Existing Active Coupon...</option>
+                            {coupons.filter(c => c.enabled).map(c => (
+                              <option key={c.id} value={c.code}>{c.code} ({c.discount}% OFF)</option>
+                            ))}
+                          </select>
+                        </div>
                       )}
-                      <button
-                        type="button"
-                        onClick={addCouponToEdit}
-                        className="h-10 px-3.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
-                      >
-                        <Plus size={14} /> Add Coupon
-                      </button>
                     </div>
 
                     {/* Added Coupons List for Edit */}

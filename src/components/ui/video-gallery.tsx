@@ -4,23 +4,49 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X, Play, Volume2, VolumeX } from 'lucide-react';
 import { getGalleryVideos, syncVideosFromSheets, type GalleryVideo } from '@/lib/galleryStore';
 
+function getYoutubeVideoId(url: string): string | null {
+  if (!url) return null;
+  const clean = url.trim();
+  const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/;
+  const match = clean.match(regExp);
+  if (match && match[1]) return match[1];
+
+  try {
+    const parsed = new URL(clean.startsWith("http") ? clean : `https://${clean}`);
+    if (parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be")) {
+      const v = parsed.searchParams.get("v");
+      if (v && v.length === 11) return v;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const last = parts[parts.length - 1];
+      if (last && last.length === 11) return last;
+    }
+  } catch {}
+  return null;
+}
+
 function getYoutubeEmbedUrl(url: string): string | null {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11 ? `https://www.youtube.com/embed/${match[2]}?autoplay=1` : null;
+  const id = getYoutubeVideoId(url);
+  return id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` : null;
 }
 
 function getYoutubeThumbnail(url: string): string | null {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11 ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
+  const id = getYoutubeVideoId(url);
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+}
+
+function getDriveEmbedUrl(url: string): string | null {
+  if (!url) return null;
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? `https://drive.google.com/file/d/${match[1]}/preview` : null;
 }
 
 function getEmbedUrl(url: string): string | null {
-  return getYoutubeEmbedUrl(url);
+  if (!url) return null;
+  return getYoutubeEmbedUrl(url) || getDriveEmbedUrl(url);
 }
 
 function getThumbnail(url: string): string | null {
+  if (!url) return null;
   return getYoutubeThumbnail(url);
 }
 
@@ -73,6 +99,13 @@ function VideoCard({ video, onClick }: VideoCardProps) {
               <Play size={20} fill="currentColor" className="ml-0.5" />
             </div>
           </div>
+        </div>
+      ) : embedUrl ? (
+        <div className="relative w-full aspect-video bg-[#161b22] flex flex-col items-center justify-center gap-2 overflow-hidden group-hover:bg-[#1c222b] transition-colors">
+          <div className="w-12 h-12 rounded-full bg-[#E8A820]/90 text-black flex items-center justify-center transition-all duration-300 group-hover:scale-110 shadow-lg shadow-[#E8A820]/20">
+            <Play size={20} fill="currentColor" className="ml-0.5" />
+          </div>
+          <span className="text-[11px] text-white/50 uppercase tracking-widest font-semibold">Watch Video</span>
         </div>
       ) : (
         <div className="relative w-full bg-black overflow-hidden">
