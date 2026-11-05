@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { getOffers, addOffer, removeOffer, updateOffer, pullOffersFromSheets, normalizeImageUrl, formatOfferDateTime } from "@/lib/offersStore";
-import { getCoupons, addCoupon, updateCoupon, removeCoupon, ensureCouponExists, pullFromSheets, parseDiscountPercent } from "@/lib/couponStore";
+import { getOffers, addOffer, removeOffer, updateOffer, pullOffersFromSupabase, normalizeImageUrl, formatOfferDateTime } from "@/lib/offersStore";
+import { getCoupons, addCoupon, updateCoupon, removeCoupon, ensureCouponExists, pullFromSupabase, parseDiscountPercent } from "@/lib/couponStore";
 import type { Coupon } from "@/lib/couponStore";
 import type { Offer } from "@/data/offers";
 import { Plus, Trash2, Edit, LogOut, Users, Tag, Link, X, Check, Ticket, ToggleLeft, ToggleRight, RefreshCw, Loader2 } from "lucide-react";
@@ -149,7 +149,7 @@ export default function AdminOffers() {
   const [syncing, setSyncing] = useState(true);
 
   useEffect(() => {
-    // Always pull fresh from Sheets on admin panel load (cross-device sync)
+    // Always pull fresh from database on admin panel load (cross-device sync)
     const handler = () => setOffers(getOffers());
     const couponHandler = () => setCoupons(getCoupons());
     window.addEventListener("offersUpdated", handler);
@@ -159,11 +159,11 @@ export default function AdminOffers() {
     setOffers(getOffers());
     setCoupons(getCoupons());
 
-    // Always force pull from Sheets on admin load — ignore cache TTL
+    // Always force pull from Supabase on admin load — ignore cache TTL
     setSyncing(true);
     Promise.all([
-      pullOffersFromSheets().then(() => setOffers(getOffers())),
-      pullFromSheets().then((freshCoupons) => setCoupons(freshCoupons)),
+      pullOffersFromSupabase().then(() => setOffers(getOffers())),
+      pullFromSupabase().then((freshCoupons) => setCoupons(freshCoupons)),
     ]).finally(() => setSyncing(false));
 
     return () => {

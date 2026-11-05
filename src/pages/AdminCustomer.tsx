@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { fetchFresh, updateRecord, normalizeAssessment, type AssessmentData } from "@/lib/sheets";
+import { fetchFresh, updateRecord, normalizeAssessment, type AssessmentData } from "@/lib/assessments";
 import { ArrowLeft, Download, MessageCircle, CheckCircle2, Save, LogOut, Plus, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import AdminGuard from "@/components/AdminGuard";
@@ -130,7 +130,7 @@ export default function AdminCustomer({ params }: { params: { id: string } }) {
       }
       return;
     }
-    // FALLBACK: direct URL access — fetch from Sheets
+    // FALLBACK: direct URL access — fetch from database
     localStorage.removeItem("me_assessments_ts");
     fetchFresh().then(async (data) => {
       const paramId = params.id;
@@ -171,7 +171,6 @@ export default function AdminCustomer({ params }: { params: { id: string } }) {
     const isReal = (v: string) => !!v && !v.includes("GMT") && !v.includes("1899") && !v.startsWith("[") && !v.startsWith("{") && !v.toLowerCase().includes("payment id") && v !== "--" && v !== "0" && v !== "undefined" && v !== "null";
     
     EXTRA_FIELDS.forEach(f => {
-      // Search all key variations returned by Google Sheets (preWorkout, Pre-Workout, pre_workout, etc.)
       const val = String(
         r[f.key] ??
         r[f.label] ??
@@ -188,20 +187,20 @@ export default function AdminCustomer({ params }: { params: { id: string } }) {
     setTimeout(() => { isLoaded.current = true; }, 400);
   }
 
-  // Debounced auto-save effect: saves automatically to localStorage and Sheets whenever meals/extras change
+  // Debounced auto-save effect: saves automatically to localStorage and Supabase whenever meals/extras change
   useEffect(() => {
     if (!customer || !isLoaded.current) return;
     // Safety guard: do not auto-save if extras object is completely empty
     if (Object.keys(extras).length === 0) return;
 
     const timer = setTimeout(() => {
-      const sheetsIdx = customer._rowIndex ?? rowIdx;
+      const recordIdx = customer._rowIndex ?? rowIdx;
       const updates: Partial<AssessmentData> = {
         earlyMorning: JSON.stringify(meals),
         status: customer.status === "New" ? "In Progress" : customer.status,
         ...Object.fromEntries(EXTRA_FIELDS.map(f => [f.key, extras[f.key] || ""])),
       };
-      updateRecord(sheetsIdx, updates);
+      updateRecord(recordIdx, updates);
     }, 300);
 
     return () => clearTimeout(timer);
@@ -221,8 +220,8 @@ export default function AdminCustomer({ params }: { params: { id: string } }) {
 
   const handleMarkComplete = async () => {
     if (!customer) return;
-    const sheetsIdx = customer._rowIndex ?? rowIdx;
-    await updateRecord(sheetsIdx, { status: "Completed" });
+    const recordIdx = customer._rowIndex ?? rowIdx;
+    await updateRecord(recordIdx, { status: "Completed" });
     setCustomer(c => c ? { ...c, status: "Completed" } : c);
   };
 

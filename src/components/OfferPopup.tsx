@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Clock, ArrowRight, MessageSquare, Flame, Info, CheckCircle2 } from "lucide-react";
 import { useLocation } from "wouter";
-import { getOffers, pullOffersFromSheets, formatOfferDateTime } from "@/lib/offersStore";
+import { getOffers, pullOffersFromSupabase, formatOfferDateTime } from "@/lib/offersStore";
 import type { Offer } from "@/data/offers";
 import CouponClaimModal from "@/components/CouponClaimModal";
 
@@ -40,7 +40,7 @@ export default function OfferPopup() {
       setOffers(active);
     };
     loadPopupOffers();
-    pullOffersFromSheets().catch(() => {});
+    pullOffersFromSupabase().catch(() => {});
     window.addEventListener("offersUpdated", loadPopupOffers);
     return () => window.removeEventListener("offersUpdated", loadPopupOffers);
   }, []);

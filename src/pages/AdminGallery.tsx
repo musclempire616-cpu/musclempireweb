@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { 
-  getGalleryImages, addGalleryImage, removeGalleryImage, syncImagesFromSheets, type GalleryImage,
-  getGalleryVideos, addGalleryVideo, removeGalleryVideo, syncVideosFromSheets, type GalleryVideo 
+  getGalleryImages, addGalleryImage, removeGalleryImage, syncImagesFromSupabase, type GalleryImage,
+  getGalleryVideos, addGalleryVideo, removeGalleryVideo, syncVideosFromSupabase, type GalleryVideo 
 } from "@/lib/galleryStore";
 import { Plus, Trash2, Image as ImageIcon, Video, LogOut, Users, Tag, Play, X, Upload, Loader2, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

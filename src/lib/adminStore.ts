@@ -1,4 +1,4 @@
-import type { AssessmentData } from "./sheets";
+import type { AssessmentData } from "./assessments";
 
 // Module-level store — persists across navigation within the same tab session
 let selectedAssessment: AssessmentData | null = null;

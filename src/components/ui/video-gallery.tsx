@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X, Play, Volume2, VolumeX } from 'lucide-react';
-import { getGalleryVideos, syncVideosFromSheets, type GalleryVideo } from '@/lib/galleryStore';
+import { getGalleryVideos, syncVideosFromSupabase, type GalleryVideo } from '@/lib/galleryStore';
 
 function getYoutubeVideoId(url: string): string | null {
   if (!url) return null;
@@ -209,7 +209,7 @@ export function VideoGallery() {
 
   useEffect(() => {
     getGalleryVideos().then(setStoreVideos);
-    syncVideosFromSheets().then(setStoreVideos);
+    syncVideosFromSupabase().then(setStoreVideos);
     const handler = () => {
       getGalleryVideos().then(setStoreVideos);
     };

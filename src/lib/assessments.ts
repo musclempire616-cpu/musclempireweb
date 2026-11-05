@@ -1,7 +1,5 @@
 import { supabase } from "@/lib/supabase";
 
-export const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxHgA547k5788i59mlE7KeAzaIM-lfZBHq900iVTHnja-bTpr02JV32NuHjiOWHQImJcw/exec";
-
 export type AssessmentData = {
   id?: string;
   _rowIndex?: number;

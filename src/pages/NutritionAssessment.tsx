@@ -18,8 +18,8 @@ import { CheckCircle2, User, Scale, Heart, Utensils, Target, FileText, Clock, Ch
 import { FaWhatsapp } from "react-icons/fa";
 import PlanNavbar from "@/components/PlanNavbar";
 import Footer from "@/components/Footer";
-import { submitAssessment } from "@/lib/sheets";
-import type { AssessmentData } from "@/lib/sheets";
+import { submitAssessment } from "@/lib/assessments";
+import type { AssessmentData } from "@/lib/assessments";
 import { RAZORPAY_KEY } from "@/lib/razorpay";
 import { validateCoupon } from "@/lib/couponStore";
 

@@ -4,6 +4,3 @@ dist
 *.local
 .env
 .env.*
-
-# Sensitive docs — Apps Script code with admin token
-GOOGLE_APPS_SCRIPT.md

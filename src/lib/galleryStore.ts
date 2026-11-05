@@ -85,8 +85,8 @@ function setupRealtime() {
     supabase
       .channel("public:gallery")
       .on("postgres_changes", { event: "*", schema: "public", table: "gallery" }, () => {
-        syncImagesFromSheets().catch(() => {});
-        syncVideosFromSheets().catch(() => {});
+        syncImagesFromSupabase().catch(() => {});
+        syncVideosFromSupabase().catch(() => {});
         window.dispatchEvent(new CustomEvent("galleryUpdated"));
       })
       .subscribe();
@@ -148,12 +148,12 @@ async function fetchVideosFromSupabase(): Promise<GalleryVideo[] | null> {
 
 export async function getGalleryImages(): Promise<GalleryImage[]> {
   if (!isRecentLocalEdit() && !isSavingImages) {
-    syncImagesFromSheets().catch(() => {});
+    syncImagesFromSupabase().catch(() => {});
   }
   return getLocalImages();
 }
 
-export async function syncImagesFromSheets(): Promise<GalleryImage[]> {
+export async function syncImagesFromSupabase(): Promise<GalleryImage[]> {
   if (isRecentLocalEdit() || isSavingImages) {
     return getLocalImages();
   }
@@ -203,12 +203,12 @@ export function removeGalleryImage(id: string): void {
 
 export async function getGalleryVideos(): Promise<GalleryVideo[]> {
   if (!isRecentLocalEdit() && !isSavingVideos) {
-    syncVideosFromSheets().catch(() => {});
+    syncVideosFromSupabase().catch(() => {});
   }
   return getLocalVideos();
 }
 
-export async function syncVideosFromSheets(): Promise<GalleryVideo[]> {
+export async function syncVideosFromSupabase(): Promise<GalleryVideo[]> {
   if (isRecentLocalEdit() || isSavingVideos) {
     return getLocalVideos();
   }

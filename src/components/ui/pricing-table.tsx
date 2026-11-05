@@ -5,7 +5,7 @@ import { CheckIcon } from "@radix-ui/react-icons"
 import NumberFlow from "@number-flow/react"
 import { X, ArrowRight } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
-import { validateCoupon, validateCouponDirect, getCoupons, syncCouponsFromSheets } from "@/lib/couponStore"
+import { validateCoupon, validateCouponDirect, getCoupons, pullFromSupabase } from "@/lib/couponStore"
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -70,8 +70,8 @@ export function PricingTable({
   const [appliedCoupon, setAppliedCoupon] = React.useState<string | null>(null)
   const [discount, setDiscount]         = React.useState(0)
 
-  // Sync coupons from Sheets on mount (background, non-blocking)
-  React.useEffect(() => { syncCouponsFromSheets(); }, [])
+  // Sync coupons from Supabase database on mount (background, non-blocking)
+  React.useEffect(() => { pullFromSupabase(); }, [])
 
   async function applyCoupon() {
     const code = couponInput.trim().toUpperCase()

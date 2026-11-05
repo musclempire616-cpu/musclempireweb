@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { fetchFresh, type AssessmentData } from "@/lib/sheets";
+import { fetchFresh, type AssessmentData } from "@/lib/assessments";
 import { ArrowLeft, LogOut, Calendar, Target, TrendingDown, TrendingUp, User, Activity } from "lucide-react";
 import { motion } from "framer-motion";
 import AdminGuard from "@/components/AdminGuard";

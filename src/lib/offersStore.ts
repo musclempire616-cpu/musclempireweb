@@ -197,9 +197,6 @@ export async function pullOffersFromSupabase(): Promise<Offer[]> {
   return inMemoryOffers;
 }
 
-// Backward compatibility alias for existing components
-export const pullOffersFromSheets = pullOffersFromSupabase;
-
 // ── Public Store API ─────────────────────────────────────────────────────────
 
 export function getOffers(): Offer[] {

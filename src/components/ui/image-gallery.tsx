@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getGalleryImages, syncImagesFromSheets, type GalleryImage } from '@/lib/galleryStore';
+import { getGalleryImages, syncImagesFromSupabase, type GalleryImage } from '@/lib/galleryStore';
 
 
 
@@ -170,8 +170,8 @@ export function ImageGallery() {
   useEffect(() => {
     // Render local cache instantly
     getGalleryImages().then(setStoreImages);
-    // Force sync fresh from Sheets
-    syncImagesFromSheets().then(setStoreImages);
+    // Force sync fresh from database
+    syncImagesFromSupabase().then(setStoreImages);
     const handler = () => {
       getGalleryImages().then(setStoreImages);
     };

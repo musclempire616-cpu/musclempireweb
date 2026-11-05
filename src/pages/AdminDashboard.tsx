@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { fetchSubmissions, deleteRecord, normalizeAssessment, type AssessmentData } from "@/lib/sheets";
+import { fetchSubmissions, deleteRecord, normalizeAssessment, type AssessmentData } from "@/lib/assessments";
 import { Search, RefreshCw, Users, Clock, CheckCircle2, AlertCircle, LogOut, Trash2, Activity, Image as ImageIcon, Tag } from "lucide-react";
 import { motion } from "framer-motion";
 import AdminGuard from "@/components/AdminGuard";
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
   };
 
   const handleDelete = async (arrayIndex: number, rowIndex: number) => {
-    // Always reload fresh from Sheets first to get accurate row indices
+    // Reload fresh from Supabase database to ensure accurate indices
     const freshData = await fetchSubmissions(true);
     setData(freshData);
     // Find the matching row by arrayIndex in fresh data

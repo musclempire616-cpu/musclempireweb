@@ -147,10 +147,6 @@ export async function pullFromSupabase(): Promise<Coupon[]> {
   return inMemoryCoupons;
 }
 
-// Backward compatibility alias for existing callers
-export const pullFromSheets = pullFromSupabase;
-export const syncCouponsFromSheets = pullFromSupabase;
-
 // ── Public Store API ─────────────────────────────────────────────────────────
 
 export function getCoupons(): Coupon[] {
